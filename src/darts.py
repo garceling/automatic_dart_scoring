@@ -10,8 +10,8 @@ from game_501 import update_score, check_game_over
 
 # Constants
 NUM_CAMERAS = 3
-IMAGE_WIDTH = 1280
-IMAGE_HEIGHT = 720
+IMAGE_WIDTH = 640
+IMAGE_HEIGHT = 480
 DARTBOARD_DIAMETER_MM = 451
 DOUBLE_RING_OUTER_RADIUS_MM = 170
 
@@ -530,12 +530,31 @@ def main(mode="standard"):
 
                     # Find the camera with the majority score
                     majority_camera_index = camera_scores.index(final_score)
-                    dart_coordinates = (locationofdart_R, locationofdart_L, locationofdart_C)[majority_camera_index]
+                    #dart_coordinates = (locationofdart_R, locationofdart_L, locationofdart_C)[majority_camera_index]
+                    dart_coordinatesR = locationofdart_R
+                    dart_coordinatesL = locationofdart_L
+                    dart_coordinatesC = locationofdart_C
 
                     # Transform the dart coordinates to match the drawn dartboard
-                    if dart_coordinates is not None:
-                        x, y = dart_coordinates
-                        inverse_matrix = cv2.invert(perspective_matrices[majority_camera_index])[1]
+                    if dart_coordinatesR is not None:
+                        x, y = dart_coordinatesR
+                        inverse_matrix = cv2.invert(perspective_matrices[0])[1]
+                        transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
+                        dart_coordinates = tuple(map(int, transformed_coords))
+
+                    
+                    # Transform the dart coordinates to match the drawn dartboard
+                    if dart_coordinatesL is not None:
+                        x, y = dart_coordinatesL
+                        inverse_matrix = cv2.invert(perspective_matrices[1])[1]
+                        transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
+                        dart_coordinates = tuple(map(int, transformed_coords))
+
+
+                    # Transform the dart coordinates to match the drawn dartboard
+                    if dart_coordinatesC is not None:
+                        x, y = dart_coordinatesC
+                        inverse_matrix = cv2.invert(perspective_matrices[2])[1]
                         transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
                         dart_coordinates = tuple(map(int, transformed_coords))
 

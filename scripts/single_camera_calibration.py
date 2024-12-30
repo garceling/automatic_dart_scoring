@@ -1,3 +1,16 @@
+"""
+single_camera_calibration.py
+
+Based on: https://temugeb.github.io/opencv/python/2021/02/02/stereo-camera-calibration-and-triangulation.html
+
+Function:
+This file is used to find the intrinsic paramters of the camera used. This info is not "necceraily" needed for the calibration 
+of the dartboard. Since the cameras will have a fixed setup and the dartboard itself is treated like a 2D plane.
+
+To use this file, you need to print out a checkboard pattern and calibraite the camera with that. Note: the RMSE value of the cameras we are using
+is fairly poor compared to the LOGITECH usb camera. That should not interfer with the results since the cameras will always be placed close to the dartboard
+
+"""
 import cv2 as cv
 import glob
 import numpy as np
@@ -154,7 +167,7 @@ if __name__ == '__main__':
 
     current_path = os.getcwd()
     file_name = "calibration_settings.yaml"
-    file_path = os.path.join(current_path, file_name)
+    file_path = os.path.join(current_path, "..", "config", file_name)
 
     #Open and parse the settings file
     parse_calibration_settings_file(file_path)
