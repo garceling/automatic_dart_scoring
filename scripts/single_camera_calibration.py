@@ -10,11 +10,13 @@ of the dartboard. Since the cameras will have a fixed setup and the dartboard it
 To use this file, you need to print out a checkboard pattern and calibraite the camera with that. Note: the RMSE value of the cameras we are using
 is fairly poor compared to the LOGITECH usb camera. That should not interfer with the results since the cameras will always be placed close to the dartboard
 
+Run this file in the project root directory
 """
 import cv2 as cv
 import glob
 import numpy as np
-
+import yaml
+import os
 #This will contain the calibration settings from the calibration_settings.yaml file
 calibration_settings = {}
 
@@ -37,7 +39,7 @@ def parse_calibration_settings_file(filename):
         print('camera0 key was not found in the settings file. Check if correct calibration_settings.yaml file was passed')
         quit()
         
-def generate_calibraiton_images(camera_name):
+def save_frames_single_camera(camera_name):
     #create frames directory
     if not os.path.exists('frames'):
         os.mkdir('frames')
@@ -102,7 +104,7 @@ def generate_calibraiton_images(camera_name):
     cv.destroyAllWindows()
 
 #this is instrinic calibration only
-def calibrate_camera(images_folder):
+def calibrate_camera_for_intrinsic_parameters(images_folder):
     images_names = sorted(glob.glob(images_folder))
     images = []
     for imname in images_names:
@@ -167,7 +169,7 @@ if __name__ == '__main__':
 
     current_path = os.getcwd()
     file_name = "calibration_settings.yaml"
-    file_path = os.path.join(current_path, "..", "config", file_name)
+    file_path = os.path.join(current_path, "config", file_name)
 
     #Open and parse the settings file
     parse_calibration_settings_file(file_path)
