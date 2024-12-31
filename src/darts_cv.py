@@ -1,10 +1,12 @@
 """
-refactor_darts.py
+darts_cv.py
 
 Function:
 This file is the refactor version of darts.py. The main purpose of this file is to be able to throw 
 a single dart and the score be updated and sent to the the "app". Ideally, the system should also be able to recognize that
-the dart is being removed, eventually in the main.py, the leds functionality should be added
+the dart is being removed
+
+Within run_loop, the app/led interation should be added. I do not want to clutter main.py with code ( want main to be more high level ctrl)
 
 """
 import yaml
@@ -16,7 +18,7 @@ import numpy
 from kalman_filter import KalmanFilter
 from utils import *
 
-class DartBoard:
+class DartBoard_CV:
 
     def __init__(self,cam_R, cam_L, cam_C):
         self.cam_R = cam_R
@@ -40,6 +42,17 @@ class DartBoard:
         self.center = calculate_center()
         self.constants = load_constants()
         self.score_images = None
+    
+    def get_success_value(self):
+        return self.success
+
+    def check_camera_working(self):
+        for camera_index, cam in enumerate([self.cam_R, self.cam_L, self.cam_C]):
+            ret, frame = cam.read()
+            if not ret:
+                print(f"Error: Camera {camera_index} failed to return a frame.")
+                self.success = False  # Exit the while loop
+                break  
 
     def load_constants(self):
         # load yaml file with constant paramters
@@ -56,6 +69,12 @@ class DartBoard:
         self.update_reference_frame()
         time.sleep(0.1)
         self.update_reference_frame()
+    
+    def cv_intilization(self):
+        initialize_test_cameras()
+        self.perspective_matrices = utils.load_perspective_matrices()
+        # initialize Kalman filters for each camera
+        self.kalman_filter_R, kalman_filter_L, kalman_filter_C = utils.generate_kalman_filters()
 
     def check_thresholds(self):
         ''' 
@@ -63,7 +82,7 @@ class DartBoard:
         a range of 1000-7500. This likely indicates a movement ( ie: dart being thrown). There is a upper 
         limit as that could be caused by too much noise/movement
         '''
-       self.thresh_R = utils.get_threshold(self.cam_R, self.t_R)
+        self.thresh_R = utils.get_threshold(self.cam_R, self.t_R)
         thresh_L = utils.get_treshold(self.cam_L, self.t_L)
         thresh_C = utils.get_threshold(self.cam_C, self.t_C)
 
