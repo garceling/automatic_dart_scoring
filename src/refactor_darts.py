@@ -14,16 +14,7 @@ import time
 import cv2
 import numpy
 from kalman_filter import KalmanFilter
-
-# load yaml file with constant paramters
-with open("config/constants.yaml", "r") as file:
-    constants = yaml.safe_load(file)
-
-# Global variables
-dartboard_image = None
-score_images = None
-perspective_matrices = []
-center = (IMAGE_WIDTH // 2, IMAGE_HEIGHT // 2)
+from utils import *
 
 class DartBoard:
 
@@ -44,6 +35,21 @@ class DartBoard:
         self.thresh_C = None
         self.thresh_L = None
         self.thresh_R = None
+        self.dartboard_image = None
+        self.perspective_matrices = []
+        self.center = calculate_center()
+        self.constants = load_constants()
+        self.score_images = None
+
+    def load_constants(self):
+        # load yaml file with constant paramters
+        with open("config/constants.yaml", "r") as file:
+            constants = yaml.safe_load(file)
+        return constants
+
+    def calculate_center(self):
+        center = (constants['IMAGE_WIDTH'] // 2, constants['IMAGE_HEIGHT'] // 2)
+        return center
 
     def initialize_test_cameras(self):
         # Read first image twice to start loop
@@ -157,20 +163,23 @@ class DartBoard:
         self.success, self.t_R = cam2gray(self.cam_R)
         _, self.t_L = cam2gray(self.cam_L)
         _, self.t_C = cam2gray(self.cam_C)
+
+    def get_score(self,locationofdart_R,locationofdart_L,locationofdart_C):
+        for camera_index, locationofdart in enumerate([locationofdart_R, locationofdart_L, locationofdart_C]):
+                if isinstance(locationofdart, tuple) and len(locationofdart) == 2:
+                    x, y = locationofdart
+                    score = calculate_score_from_coordinates(x, y, camera_index)
+                    print(f"Camera {camera_index} - Dart Location: {locationofdart}, Score: {score}")
+
+                    # Store the score in the camera_scores list
+                    camera_scores[camera_index] = score
     
     def calculate_score(self):
         locationofdart_R, prev_tip_point_R = getRealLocation(corners_final_R, "right", prev_tip_point_R, blur_R, kalman_filter_R)
         locationofdart_L, prev_tip_point_L = getRealLocation(corners_final_L, "left", prev_tip_point_L, blur_L, kalman_filter_L)
         locationofdart_C, prev_tip_point_C = getRealLocation(corners_final_C, "center", prev_tip_point_C, blur_C, kalman_filter_C)
 
-        for camera_index, locationofdart in enumerate([locationofdart_R, locationofdart_L, locationofdart_C]):
-            if isinstance(locationofdart, tuple) and len(locationofdart) == 2:
-                x, y = locationofdart
-                score = calculate_score_from_coordinates(x, y, camera_index)
-                print(f"Camera {camera_index} - Dart Location: {locationofdart}, Score: {score}")
-
-                # Store the score in the camera_scores list
-                camera_scores[camera_index] = score
+        get_score(locationofdart_R, locationofdart_L, locationofdart_C)
 
         final_score = calculate_majority_score(camera_scores)
         
@@ -181,7 +190,28 @@ class DartBoard:
             print(f"Final Score (Majority Rule): {final_score}")
         else:
             print("No majority score found.")
+    
+    def plot_score(self):
+        # Display the scores and dart coordinates on the dartboard image
+        dartboard_image_copy = dartboard_image.copy()
+        if majority_score is not None:
+            cv2.putText(dartboard_image_copy, f"Majority Score: {majority_score}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        if dart_coordinates is not None:
+            x, y = dart_coordinates
+            cv2.circle(dartboard_image_copy, (int(x), int(y)), 5, (0, 0, 255), -1)
+        cv2.imshow('Dartboard', dartboard_image_copy)
 
+        key = cv2.waitKey(1) & 0xFF
+
+        # Check for 'q' (quit)
+        if key == ord('q'):
+            break
+
+    def destroy(self):
+        caps = []  # Define the variable "caps" as an empty list
+        for cap in caps:
+            cap.release()
+        cv2.destroyAllWindows()
 
     def run_loop(self):
         initialize_test_cameras()
@@ -201,154 +231,22 @@ class DartBoard:
 
             if found_movement:
                 time.sleep(0.2)
-                if dart_detection():
+                if self.dart_detection():
                     try:
-                        calculate_score()
+                        self.calculate_score()
+                        #TODO: add the turn on LED light here
+                        
                     except Exception as e:
                         print(f"Something went wrong in finding the dart's location: {str(e)}")
                         continue
                     # Update the reference frames after a dart has been detected
-                    update_reference_frame()
+                    self.update_reference_frame()
                 else:
                     #move to the next iteration
                     continue
             else:
-                takeout_procedure()
+                self.takeout_procedure()
             
-            display_score()
+            self.display_score()
         
-        destroy()
-
-
-
-
-
-
-def main():
-    global dartboard_image, perspective_matrices
-
-    perspective_matrices = load_perspective_matrices()
-    success, cam_R, cam_L, cam_C = intialize_cameras()
-
-    prev_tip_point_R = None
-    prev_tip_point_L = None
-    prev_tip_point_C = None
-
-    # initialize Kalman filters for each camera
-    kalman_filter_R, kalman_filter_L, kalman_filter_C = generate_kalman_filters()
-
-
-    camera_scores = [None] * NUM_CAMERAS
-    dart_count = 0
-
-    while success:
-        #attempts to read frame from each camera (check if camera work properly)
-        for camera_index, cam in enumerate([cam_R, cam_L, cam_C]):
-            ret, frame = cam.read()
-            if not ret:
-                break
-
-        time.sleep(0.1)
-
-        found_movement,self.thresh_R, thresh_L, thresh_C = check_thresholds(cam_R, cam_L, cam_C, t_R, t_L, t_C)
-
-        #found a potential dart movement
-        if found_movement:
-            time.sleep(0.2)
-
-            #applies frame subtraction
-            t_plus_R, blur_R = diff2blur(cam_R, t_R)
-            t_plus_L, blur_L = diff2blur(cam_L, t_L)
-            t_plus_C, blur_C = diff2blur(cam_C, t_C)
-
-            found_corner_detection, corners_R, corners_L, corners_C = corner_detection(blur_R, blur_L, blur_C)
-            if not found_corner_detection:
-                continue
-
-            found_filter_corner_detection,corners_f_R, corners_f_L, corners_f_C = filtered_corner_detection(corners_R, corners_L, corners_C)
-
-            if not found_filter_corner_detection:
-                continue
-
-            rows, cols = blur_R.shape[:2]
-            corners_final_R = filterCornersLine(corners_f_R, rows, cols)
-            rows, cols = blur_L.shape[:2]
-            corners_final_L = filterCornersLine(corners_f_L, rows, cols)
-            rows, cols = blur_C.shape[:2]
-            corners_final_C = filterCornersLine(corners_f_C, rows, cols)
-
-            #final dart detection
-            _,self.thresh_R = cv2.threshold(blur_R, 60, 255, 0)
-            _, thresh_L = cv2.threshold(blur_L, 60, 255, 0)
-            _, thresh_C = cv2.threshold(blur_C, 60, 255, 0)
-
-            if cv2.countNonZero(thresh_R) > 15000 or cv2.countNonZero(thresh_L) > 15000 or cv2.countNonZero(thresh_C) > 15000:
-                continue
-
-            print("Dart detected")
-
-            try:
-
-                locationofdart_R, prev_tip_point_R = getRealLocation(corners_final_R, "right", prev_tip_point_R, blur_R, kalman_filter_R)
-                locationofdart_L, prev_tip_point_L = getRealLocation(corners_final_L, "left", prev_tip_point_L, blur_L, kalman_filter_L)
-                locationofdart_C, prev_tip_point_C = getRealLocation(corners_final_C, "center", prev_tip_point_C, blur_C, kalman_filter_C)
-
-                for camera_index, locationofdart in enumerate([locationofdart_R, locationofdart_L, locationofdart_C]):
-                    if isinstance(locationofdart, tuple) and len(locationofdart) == 2:
-                        x, y = locationofdart
-                        score = calculate_score_from_coordinates(x, y, camera_index)
-                        print(f"Camera {camera_index} - Dart Location: {locationofdart}, Score: {score}")
-
-                        # Store the score in the camera_scores list
-                        camera_scores[camera_index] = score
-
-                final_score = calculate_majority_score(camera_scores)
-                
-                if final_score is not None:
-                    majority_camera_index = camera_scores.index(final_score)
-                    dart_coordinates = (locationofdart_R, locationofdart_L, locationofdart_C)[majority_camera_index]
-                    dart_coordinates = plot_score(dart_coordinates, majority_camera_index)
-                    print(f"Final Score (Majority Rule): {final_score}")
-                else:
-                    print("No majority score found.")
-
-            except Exception as e:
-                print(f"Something went wrong in finding the dart's location: {str(e)}")
-                continue
-            
-            # Update the reference frames after a dart has been detected
-            success, t_R = cam2gray(cam_R)
-            _, t_L = cam2gray(cam_L)
-            _, t_C = cam2gray(cam_C)
-        
-        else:
-            if cv2.countNonZero(thresh_R) > TAKEOUT_THRESHOLD or cv2.countNonZero(thresh_L) > TAKEOUT_THRESHOLD or cv2.countNonZero(thresh_C) > TAKEOUT_THRESHOLD:
-                #reset variables
-                prev_tip_point_R = None
-                prev_tip_point_L = None
-                prev_tip_point_C = None
-                majority_score = None
-                dart_coordinates = None
-                takeout_procedure(cam_R, cam_L, cam_C)
-
-
-
-        # Display the scores and dart coordinates on the dartboard image
-        dartboard_image_copy = dartboard_image.copy()
-        if majority_score is not None:
-            cv2.putText(dartboard_image_copy, f"Majority Score: {majority_score}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-        if dart_coordinates is not None:
-            x, y = dart_coordinates
-            cv2.circle(dartboard_image_copy, (int(x), int(y)), 5, (0, 0, 255), -1)
-        cv2.imshow('Dartboard', dartboard_image_copy)
-
-        key = cv2.waitKey(1) & 0xFF
-
-        # Check for 'q' (quit)
-        if key == ord('q'):
-            break
-
-    caps = []  # Define the variable "caps" as an empty list
-    for cap in caps:
-        cap.release()
-    cv2.destroyAllWindows()
+        self.destroy()

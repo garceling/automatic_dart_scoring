@@ -8,7 +8,7 @@ class Calibration:
         self.perspective_matrices = []
 
     def load_constants(self):
-        # load yaml file with constant paramters
+        # load yaml file with constagitnt paramters
         with open("config/constants.yaml", "r") as file:
             constants = yaml.safe_load(file)
         return constants
