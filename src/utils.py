@@ -5,13 +5,14 @@ import yaml
 from kalman_filter import KalmanFilter
 
 global constants
+global perspective_matrices = []
 
 with open("config/constants.yaml", "r") as file:
     constants = yaml.safe_load(file)
 
 def load_perspective_matrices():
-    perspective_matrices = []
-    for camera_index in range(constans['NUM_CAMERAS']):
+    #perspective_matrices = []
+    for camera_index in range(constants['NUM_CAMERAS']):
         try:
             data = np.load(f'perspective_matrix_camera_{camera_index}.npz')
             matrix = data['matrix']
@@ -20,6 +21,16 @@ def load_perspective_matrices():
             print(f"Perspective matrix file not found for camera {camera_index}. Please calibrate the cameras first.")
             exit(1)
     return perspective_matrices
+
+def generate_kalman_filters():
+    kalman_filter_R = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
+    kalman_filter_L = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
+    kalman_filter_C = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
+    return kalman_filter_R, kalman_filter_L, kalman_filter_C
+
+##################################### Camera/Image Processing Helper Functions #################################3
+
+""" These functions are also used to help detect the precesense of a dart """
 
 def cam2gray(cam):
     success, image = cam.read()
@@ -50,12 +61,6 @@ def filterCornersLine(corners, rows, cols):
     corners_final = np.array([i for i in corners if abs((righty - lefty) * i[0][0] - (cols - 1) * i[0][1] + cols * lefty - righty) / np.sqrt((righty - lefty)**2 + (cols - 1)**2) <= 40])
     return corners_final
 
-def generate_kalman_filters():
-    kalman_filter_R = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
-    kalman_filter_L = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
-    kalman_filter_C = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
-    return kalman_filter_R, kalman_filter_L, kalman_filter_C
-
 def get_threshold(cam, t):
     success, t_plus = cam2gray(cam)
     dimg = cv2.absdiff(t, t_plus)
@@ -64,7 +69,52 @@ def get_threshold(cam, t):
     _, thresh = cv2.threshold(blur, 60, 255, 0)
     return thresh
 
+#################### Calculte the Score Helper Functions ###################################################
 
+def get_score(locationofdart_R,locationofdart_L,locationofdart_C):
+    camera_scores = [None] * constants['NUM_CAMERAS']  # Initialize camera_scores list
+    for camera_index, locationofdart in enumerate([locationofdart_R, locationofdart_L, locationofdart_C]):
+            if isinstance(locationofdart, tuple) and len(locationofdart) == 2:
+                x, y = locationofdart
+                score = calculate_score_from_coordinates(x, y, camera_index)
+                print(f"Camera {camera_index} - Dart Location: {locationofdart}, Score: {score}")
+
+                # Store the score in the camera_scores list
+                camera_scores[camera_index] = score
+    return camera_scores
+
+
+def calculate_score_from_coordinates(x, y, camera_index):
+    #fix this my making it a global varible??
+    inverse_matrix = cv2.invert(perspective_matrices[camera_index])[1]
+    transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
+    transformed_x, transformed_y = transformed_coords
+
+    dx = transformed_x - constants['center'][0]
+    dy = transformed_y - constants['center'][0]
+    distance_from_center = math.sqrt(dx**2 + dy**2)
+    angle = math.atan2(dy, dx)
+    score = calculate_score(distance_from_center, angle)
+    return score
+
+def calculate_score(distance, angle):
+    if angle < 0:
+        angle += 2 * np.pi
+    sector_scores = [10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5, 20, 1, 18, 4, 13, 6]
+    sector_index = int(angle / (2 * np.pi) * 20)
+    base_score = sector_scores[sector_index]
+    if distance <= constants['BULLSEYE_RADIUS_PX']:
+        return 50
+    elif distance <= constants['OUTER_BULL_RADIUS_PX']:
+        return 25
+    elif constants['TRIPLE_RING_INNER_RADIUS_PX'] < distance <= constants['TRIPLE_RING_OUTER_RADIUS_PX']:
+        return base_score * 3
+    elif constants['DOUBLE_RING_INNER_RADIUS_PX'] < distance <= constants['DOUBLE_RING_OUTER_RADIUS_PX']:
+        return base_score * 2
+    elif distance <= constants['DOUBLE_RING_OUTER_RADIUS_PX']:
+        return base_score
+    else:
+        return 0
 
 def get_score_coordinates(dart_coordinates, majority_camera_index):
     # Transform the dart coordinates to match the drawn dartboard
@@ -76,105 +126,58 @@ def get_score_coordinates(dart_coordinates, majority_camera_index):
         return dart_coordinates
     return None
 
-def takeout_procedure(cam_R, cam_L, cam_C, mode):
-    print("Takeout procedure initiated.")
+########################### Dartboard GUI drawer helper functions ###############################################
+def draw_segment_text(image, center, start_angle, end_angle, radius, text):
+    angle = (start_angle + end_angle) / 2
+    text_x = int(center[0] + radius * np.cos(angle))
+    text_y = int(center[1] + radius * np.sin(angle))
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    font_scale = 0.5
+    font_thickness = 1
+    text_size = cv2.getTextSize(text, font, font_scale, font_thickness)[0]
+    text_origin = (text_x - text_size[0] // 2, text_y + text_size[1] // 2)
+    cv2.putText(image, text, text_origin, font, font_scale, (0, 255, 0), font_thickness, cv2.LINE_AA)
 
-    start_time = time.time()
-    # Wait for the specified delay to allow hand removal
-    while time.time() - start_time < constants['TAKEOUT_DELAY']:
-        cam2gray(cam_R)
-        cam2gray(cam_L)
-        cam2gray(cam_C)
-        time.sleep(0.1)
+def draw_point_at_angle(image, center, angle_degrees, radius, color, point_radius):
+    angle_radians = np.radians(angle_degrees)
+    x = int(center[0] + radius * np.cos(angle_radians))
+    y = int(center[1] - radius * np.sin(angle_radians))
+    cv2.circle(image, (x, y), point_radius, color, -1)
 
-    print("Takeout procedure completed.")
+def draw_dartboard():
+    # Create a blank image with white background
+    dartboard_image = np.ones((constants['IMAGE_HEIGHT'], constants['IMAGE_WIDTH'], 3), dtype=np.uint8) * 255
 
-def calculate_score_from_coordinates(x, y, camera_index):
-    inverse_matrix = cv2.invert(perspective_matrices[camera_index])[1]
-    transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
-    transformed_x, transformed_y = transformed_coords
+    # Draw the bullseye and rings
+    cv2.circle(dartboard_image, constants['center'], constants['BULLSEYE_RADIUS_PX'], (0, 0, 0), -1, lineType=cv2.LINE_AA)  # Bullseye
+    cv2.circle(dartboard_image, constants['center'], constants['OUTER_BULL_RADIUS_PX'], (255, 0, 0), 2, lineType=cv2.LINE_AA)  # Outer bull
+    cv2.circle(dartboard_image, constants['center'], constants['TRIPLE_RING_INNER_RADIUS_PX'], (0, 255, 0), 2, lineType=cv2.LINE_AA)  # Inner triple
+    cv2.circle(dartboard_image, constants['center'], constants['TRIPLE_RING_OUTER_RADIUS_PX'], (0, 255, 0), 2, lineType=cv2.LINE_AA)  # Outer triple
+    cv2.circle(dartboard_image, constants['center'], constants['DOUBLE_RING_INNER_RADIUS_PX'], (0, 0, 255), 2, lineType=cv2.LINE_AA)  # Inner double
+    cv2.circle(dartboard_image, constants['center'], constants['DOUBLE_RING_OUTER_RADIUS_PX'], (0, 0, 255), 2, lineType=cv2.LINE_AA)  # Outer double
 
-    dx = transformed_x - center[0]
-    dy = transformed_y - center[1]
-    distance_from_center = math.sqrt(dx**2 + dy**2)
-    angle = math.atan2(dy, dx)
-    score = calculate_score(distance_from_center, angle)
-    return score
+    # Draw the sector lines
+    for angle in np.linspace(0, 2 * np.pi, 21)[:-1]:  # 20 sectors
+        start_x = int(constants['center'][0] + np.cos(angle) * constants['DOUBLE_RING_OUTER_RADIUS_PX'])
+        start_y = int(constants['center'][1] + np.sin(angle) * constants['DOUBLE_RING_OUTER_RADIUS_PX'])
+        end_x = int(constants['center'][0] + np.cos(angle) * constants['OUTER_BULL_RADIUS_PX'])
+        end_y = int(constants['center'][1] + np.sin(angle) * constants['OUTER_BULL_RADIUS_PX'])
+        cv2.line(dartboard_image, (start_x, start_y), (end_x, end_y), (0, 0, 0), 1, lineType=cv2.LINE_AA)
 
-def getRealLocation(corners_final, mount, prev_tip_point=None, blur=None, kalman_filter=None):
-    if mount == "right":
-        loc = np.argmax(corners_final, axis=0)
-    else:
-        loc = np.argmin(corners_final, axis=0)
-    locationofdart = corners_final[loc]
-    
-    # Skeletonize the dart contour
-    dart_contour = corners_final.reshape((-1, 1, 2))
-    skeleton = cv2.ximgproc.thinning(cv2.drawContours(np.zeros_like(blur), [dart_contour], -1, 255, thickness=cv2.FILLED))
-    
-    # Detect the dart tip using skeletonization and Kalman filter
-    dart_tip = find_dart_tip(skeleton, prev_tip_point, kalman_filter)
-    
-    if dart_tip is not None:
-        tip_x, tip_y = dart_tip
-        # Draw a circle around the dart tip
-        if blur is not None:
-            cv2.circle(blur, (tip_x, tip_y), 5, (0, 255, 0), 2)
-        
-        locationofdart = dart_tip
-    
-    return locationofdart, dart_tip
+    text_radius_px = int((constants['TRIPLE_RING_OUTER_RADIUS_PX'] + constants['DOUBLE_RING_INNER_RADIUS_PX']) / 2)
 
-def calculate_score(distance, angle):
-    if angle < 0:
-        angle += 2 * np.pi
     sector_scores = [10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5, 20, 1, 18, 4, 13, 6]
-    sector_index = int(angle / (2 * np.pi) * 20)
-    base_score = sector_scores[sector_index]
-    if distance <= BULLSEYE_RADIUS_PX:
-        return 50
-    elif distance <= OUTER_BULL_RADIUS_PX:
-        return 25
-    elif TRIPLE_RING_INNER_RADIUS_PX < distance <= TRIPLE_RING_OUTER_RADIUS_PX:
-        return base_score * 3
-    elif DOUBLE_RING_INNER_RADIUS_PX < distance <= DOUBLE_RING_OUTER_RADIUS_PX:
-        return base_score * 2
-    elif distance <= DOUBLE_RING_OUTER_RADIUS_PX:
-        return base_score
-    else:
-        return 0
-        
-def find_dart_tip(skeleton, prev_tip_point, kalman_filter):
-    # Find the contour of the skeleton
-    contours, _ = cv2.findContours(skeleton, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    
-    if len(contours) > 0:
-        # Find the contour with the maximum area (assuming it represents the dart)
-        dart_contour = max(contours, key=cv2.contourArea)
+    for i, score in enumerate(sector_scores):
+        start_angle = (i * 360 / 20 - 0) * np.pi / 180
+        end_angle = ((i + 1) * 360 / 20 - 0) * np.pi / 180
+        draw_segment_text(dartboard_image, constants['center'], start_angle, end_angle, text_radius_px, str(score))
 
-        # Convert the contour to a Shapely Polygon
-        dart_polygon = Polygon(dart_contour.reshape(-1, 2))
+    sector_intersections = {
+        '20_1': 0,
+        '6_10': 90,
+        '19_3': 180,
+        '11_14': 270,
+    }
 
-        # Find the lowest point of the dart contour
-        dart_points = dart_polygon.exterior.coords
-        lowest_point = max(dart_points, key=lambda x: x[1])
-
-        # Adjust the tip coordinates by half of the tip's diameter
-        tip_radius_px = constants['TIP_RADIUS_MM'] * constants['PIXELS_PER_MM']
-
-        # Determine the adjustment direction based on the camera's perspective
-        adjustment_direction = 0  # Adjust towards the dartboard center (negative direction)
-
-        # Calculate the adjusted tip coordinates
-        adjusted_tip_x = lowest_point[0] + adjustment_direction * tip_radius_px
-        adjusted_tip_y = lowest_point[1]
-
-        # Predict the dart tip position using the Kalman filter
-        predicted_tip = kalman_filter.predict()
-        
-        # Update the Kalman filter with the observed dart tip position
-        kalman_filter.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
-        
-        return int(adjusted_tip_x), int(adjusted_tip_y)
-    
-    return None
+    for angle in sector_intersections.values():
+        draw_point_at_angle(dartboard_image, constants['center'], angle, constants['DOUBLE_RING_OUTER_RADIUS_PX'], (255, 0, 0), 5)

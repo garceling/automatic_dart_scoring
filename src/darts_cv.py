@@ -19,12 +19,13 @@ from utils import *
 class DartBoard_CV:
 
     def __init__(self,cam_R, cam_L, cam_C):
+        #TODO: clean this up/group em
 
         self.cam_R = cam_R
         self.cam_L = cam_L
         self.cam_C = cam_C
         self.constants = load_constants()
-        self.camera_scores = [None] * NUM_CAMERAS  # Initialize camera_scores list
+        self.camera_scores = [None] * constants['NUM_CAMERAS']  # Initialize camera_scores list
         self.majority_score = None
         self.dart_coordinates = None
         self.prev_tip_point_R = None
@@ -37,9 +38,8 @@ class DartBoard_CV:
         self.thresh_C = None
         self.thresh_L = None
         self.thresh_R = None
-        self.dartboard_image = None
+        self.dartboard_image = utils.draw_dartboard()
         self.perspective_matrices = []
-        self.center = calculate_center()
         self.score_images = None
         self.kalman_filter_R = None
         self.kalman_filter_L = None
@@ -50,9 +50,14 @@ class DartBoard_CV:
         self.blur_R = None
         self.blur_L = None
         self.blur_C = None
-        self.final_score = None
     
     def get_success_value(self):
+        return self.success
+
+    def update_reference_frame(self):
+        self.success, self.t_R = utils.cam2gray(self.cam_R)
+        _, self.t_L = utils.cam2gray(self.cam_L)
+        _, self.t_C = utils.cam2gray(self.cam_C)
         return self.success
 
     def check_camera_working(self):
@@ -67,11 +72,6 @@ class DartBoard_CV:
         # load yaml file with constant paramters
         with open("config/constants.yaml", "r") as file:
             constants = yaml.safe_load(file)
-        return constants
-
-    def calculate_center(self):
-        center = (self.constants['IMAGE_WIDTH'] // 2, self.constants['IMAGE_HEIGHT'] // 2)
-        return center
 
     def initialize_test_cameras(self):
         # Read first image twice to start loop
@@ -168,45 +168,26 @@ class DartBoard_CV:
         print("Dart detected")
         return True
     
-    def takeout_procedure(self):
-        if cv2.countNonZero(self.thresh_R) > constants['TAKEOUT_THRESHOLD'] or cv2.countNonZero(self.thresh_L) > constants['TAKEOUT_THRESHOLD'] or cv2.countNonZero(self.thresh_C) > constants['TAKEOUT_THRESHOLD']:
-            #reset variables
-            self.prev_tip_point_R = None
-            self.prev_tip_point_L = None
-            self.prev_tip_point_C = None
-            self.majority_score = None
-            self.dart_coordinates = None
-
-            # Wait for the specified delay to allow hand removal
-            start_time = time.time()
-            while time.time() - start_time < TAKEOUT_DELAY:
-                self.update_reference_frame()
-                time.sleep(0.1)
-
-            print("Takeout procedure completed.")
-            
-
-    def update_reference_frame(self):
-        self.success, self.t_R = utils.cam2gray(self.cam_R)
-        _, self.t_L = utils.cam2gray(self.cam_L)
-        _, self.t_C = utils.cam2gray(self.cam_C)
-        return self.success
-
-    def get_score(self,locationofdart_R,locationofdart_L,locationofdart_C):
-        for camera_index, locationofdart in enumerate([locationofdart_R, locationofdart_L, locationofdart_C]):
-                if isinstance(locationofdart, tuple) and len(locationofdart) == 2:
-                    x, y = locationofdart
-                    score = calculate_score_from_coordinates(x, y, camera_index)
-                    print(f"Camera {camera_index} - Dart Location: {locationofdart}, Score: {score}")
-
-                    # Store the score in the camera_scores list
-                    self.camera_scores[camera_index] = score
-
-    def getRealLocation(self,corners_final, mount, prev_tip_point=None, blur=None, kalman_filter=None):
+    def getRealLocation(self, mount):
         if mount == "right":
             loc = np.argmax(corners_final, axis=0)
-        else:
+            blur = self.blur_R
+            prev_tip_point = self.prev_tip_point_R
+            kalman_filter = self.kalman_filter_R
+            corners_final = self.corners_final_R
+        else if mount == "center":
             loc = np.argmin(corners_final, axis=0)
+            blur = self.blur_C
+            prev_tip_point = self.prev_tip_point_C
+            kalman_filter = self.kalman_filter_C    
+            corners_final = self.corners_final_C
+        else if mount == "left":
+            loc = np.argmin(corners_final, axis=0)
+            blur = self.blur_L
+            prev_tip_point = self.prev_tip_point_L
+            kalman_filter = self.kalman_filter_L 
+            corners_final = self.corners_final_L
+
         locationofdart = corners_final[loc]
         
         # Skeletonize the dart contour
@@ -214,7 +195,7 @@ class DartBoard_CV:
         skeleton = cv2.ximgproc.thinning(cv2.drawContours(np.zeros_like(blur), [dart_contour], -1, 255, thickness=cv2.FILLED))
         
         # Detect the dart tip using skeletonization and Kalman filter
-        dart_tip = find_dart_tip(skeleton, prev_tip_point, kalman_filter)
+        dart_tip = find_dart_tip(skeleton, prev_tip_point, mount)
         
         if dart_tip is not None:
             tip_x, tip_y = dart_tip
@@ -226,7 +207,9 @@ class DartBoard_CV:
         
         return locationofdart, dart_tip
 
-    def find_dart_tip(skeleton, prev_tip_point, kalman_filter):
+    def find_dart_tip(skeleton, prev_tip_point, mount):
+
+
         # Find the contour of the skeleton
         contours, _ = cv2.findContours(skeleton, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
@@ -251,16 +234,25 @@ class DartBoard_CV:
             adjusted_tip_x = lowest_point[0] + adjustment_direction * tip_radius_px
             adjusted_tip_y = lowest_point[1]
 
-            # Predict the dart tip position using the Kalman filter
-            predicted_tip = kalman_filter.predict()
+            if mount == "right":
+                # Predict the dart tip position using the Kalman filter
+                predicted_tip = self.kalman_filter_R.predict()
+                
+                # Update the Kalman filter with the observed dart tip position
+                self.kalman_filter_R.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
             
-            # Update the Kalman filter with the observed dart tip position
-            kalman_filter.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
-            
+            else if mount == "center":
+                predicted_tip = self.kalman_filter_C.predict()
+                self.kalman_filter_R.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
+
+            else if mount == "left":
+                predicted_tip = self.kalman_filter_L.predict()
+                self.kalman_filter_L.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
+
             return int(adjusted_tip_x), int(adjusted_tip_y)
         
         return None
-
+    
     def calculate_majority_score(self):
         score_counts = {}
         for score in self.camera_scores:
@@ -271,31 +263,56 @@ class DartBoard_CV:
             return max(score_counts, key=score_counts.get)
 
         return None
-    
+        
+    def transform_score(self, majority_camera_index):
+        x, y = self.dart_coordinates
+        inverse_matrix = cv2.invert(self.perspective_matrices[majority_camera_index])[1]
+        transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
+        self.dart_coordinates = tuple(map(int, transformed_coords))
+
+
     def calculate_score(self):
-        locationofdart_R, self.prev_tip_point_R = self.getRealLocation(self.corners_final_R, "right", self.prev_tip_point_R, blur_R, self.kalman_filter_R)
-        locationofdart_L, self.prev_tip_point_L = self.getRealLocation(self.corners_final_L, "left", self.prev_tip_point_L, blur_L, self.kalman_filter_L)
-        locationofdart_C, self.prev_tip_point_C = self.getRealLocation(self.corners_final_C, "center", self.prev_tip_point_C, blur_C, self.kalman_filter_C)
+        locationofdart_R, self.prev_tip_point_R = self.getRealLocation("right")
+        locationofdart_L, self.prev_tip_point_L = self.getRealLocation("left")
+        locationofdart_C, self.prev_tip_point_C = self.getRealLocation("center")
 
         self.get_score(locationofdart_R, locationofdart_L, locationofdart_C)
 
-        self.final_score = calculate_majority_score()
+        self.majority_score = calculate_majority_score()
         
-        if self.final_score is not None:
-            majority_camera_index = self.camera_scores.index(final_score)
+        if self.majority_score is not None:
+            majority_camera_index = self.camera_scores.index(self.majority_score)
             self.dart_coordinates = (locationofdart_R, locationofdart_L, locationofdart_C)[majority_camera_index]
-            self.dart_coordinates = plot_score(dart_coordinates, majority_camera_index)
-            print(f"Final Score (Majority Rule): {self.final_score}")
+            self.transform_score(majority_camera_index)
+            print(f"Final Score (Majority Rule): {self.majority_score}")
         else:
             print("No majority score found.")
-    
+
+
+    def takeout_procedure(self):
+        if cv2.countNonZero(self.thresh_R) > constants['TAKEOUT_THRESHOLD'] or cv2.countNonZero(self.thresh_L) > constants['TAKEOUT_THRESHOLD'] or cv2.countNonZero(self.thresh_C) > constants['TAKEOUT_THRESHOLD']:
+            #reset variables
+            self.prev_tip_point_R = None
+            self.prev_tip_point_L = None
+            self.prev_tip_point_C = None
+            self.majority_score = None
+            self.dart_coordinates = None
+
+            # Wait for the specified delay to allow hand removal
+            start_time = time.time()
+            while time.time() - start_time < constants['TAKEOUT_DELAY']:
+                self.update_reference_frame()
+                time.sleep(0.1)
+
+            print("Takeout procedure completed.")
+
     def plot_score(self):
         # Display the scores and dart coordinates on the dartboard image
-        dartboard_image_copy = dartboard_image.copy()
-        if majority_score is not None:
-            cv2.putText(dartboard_image_copy, f"Majority Score: {majority_score}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-        if dart_coordinates is not None:
-            x, y = dart_coordinates
+        dartboard_image_copy = self.dartboard_image.copy()
+        if self.majority_score is not None:
+            cv2.putText(dartboard_image_copy, f"Majority Score: {self.majority_score}", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        if self.dart_coordinates is not None:
+            x, y = self.dart_coordinates
             cv2.circle(dartboard_image_copy, (int(x), int(y)), 5, (0, 0, 255), -1)
         cv2.imshow('Dartboard', dartboard_image_copy)
 
