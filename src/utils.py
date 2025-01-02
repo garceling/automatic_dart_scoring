@@ -1,6 +1,17 @@
+import os
+import sys
+import cv2
+import yaml
+from kalman_filter import KalmanFilter
+
+global constants
+
+with open("config/constants.yaml", "r") as file:
+    constants = yaml.safe_load(file)
+
 def load_perspective_matrices():
     perspective_matrices = []
-    for camera_index in range(NUM_CAMERAS):
+    for camera_index in range(constans['NUM_CAMERAS']):
         try:
             data = np.load(f'perspective_matrix_camera_{camera_index}.npz')
             matrix = data['matrix']
@@ -14,14 +25,6 @@ def cam2gray(cam):
     success, image = cam.read()
     img_g = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
     return success, img_g
-
-def getThreshold(cam, t):
-    success, t_plus = cam2gray(cam)
-    dimg = cv2.absdiff(t, t_plus)
-    blur = cv2.GaussianBlur(dimg, (5, 5), 0)
-    blur = cv2.bilateralFilter(blur, 9, 75, 75)
-    _, thresh = cv2.threshold(blur, 60, 255, 0)
-    return thresh
 
 def diff2blur(cam, t):
     _, t_plus = cam2gray(cam)
@@ -47,34 +50,10 @@ def filterCornersLine(corners, rows, cols):
     corners_final = np.array([i for i in corners if abs((righty - lefty) * i[0][0] - (cols - 1) * i[0][1] + cols * lefty - righty) / np.sqrt((righty - lefty)**2 + (cols - 1)**2) <= 40])
     return corners_final
 
-def intialize_cameras():
-    
-    cam_R = cv2.VideoCapture(0)
-    cam_L = cv2.VideoCapture(2)
-    cam_C = cv2.VideoCapture(4)
-
-    if not cam_R.isOpened() or not cam_L.isOpened() or not cam_C.isOpened():
-        print("Failed to open one or more cameras.")
-        sys.exit()
-
-    # Read first image twice to start loop
-    _, _ = cam2gray(cam_R)
-    _, _ = cam2gray(cam_L)
-    _, _ = cam2gray(cam_C)
-
-    time.sleep(0.1)
-
-    success, t_R = cam2gray(cam_R)
-    _, t_L = cam2gray(cam_L)
-    _, t_C = cam2gray(cam_C)
-
-    return success, cam_R, cam_L, cam_C
-
-
 def generate_kalman_filters():
-    kalman_filter_R = KalmanFilter(DT, U_X, U_Y, STD_ACC, X_STD_MEAS, Y_STD_MEAS)
-    kalman_filter_L = KalmanFilter(DT, U_X, U_Y, STD_ACC, X_STD_MEAS, Y_STD_MEAS)
-    kalman_filter_C = KalmanFilter(DT, U_X, U_Y, STD_ACC, X_STD_MEAS, Y_STD_MEAS)
+    kalman_filter_R = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
+    kalman_filter_L = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
+    kalman_filter_C = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
     return kalman_filter_R, kalman_filter_L, kalman_filter_C
 
 def get_threshold(cam, t):
@@ -86,62 +65,6 @@ def get_threshold(cam, t):
     return thresh
 
 
-def check_thresholds(cam_R, cam_L, cam_C, t_R, t_L, t_C):
-    ''' 
-    Counts the number of non-zero pixels in the threshold images. It checks if the nnz is within 
-    a range of 1000-7500. This likely indicates a movement ( ie: dart being thrown). There is a upper 
-    limit as that could be caused by too much noise/movement
-    '''
-    thresh_R = get_threshold(cam_R, t_R)
-    thresh_L = get_treshold(cam_L, t_L)
-    thresh_C = get_threshold(cam_C, t_C)
-
-    non_zero_R = cv2.countNonZero(thresh_R)
-    non_zero_L = cv2.countNonZero(thresh_L)
-    non_zero_C = cv2.countNonZero(thresh_C)
-
-    if ((1000 < non_zero_R < 7500) or 
-        (1000 < non_zero_L < 7500) or 
-        (1000 < non_zero_C < 7500)):
-        return True, thresh_R, thresh_L, thresh_C
-
-    return False, None, None, None
-
-def corner_detection(blur_R, blur_L, blur_C):
-    ''' 
-    Applies a diff operation (frame subtraction). followed by a blurring to highlihgt any changes 
-    in the frame. It then detects corners (features) in the blurred frame to find the dart
-    '''
-
-    corners_R = getCorners(blur_R)
-    corners_L = getCorners(blur_L)
-    corners_C = getCorners(blur_C)
-
-    if corners_R.size < 40 and corners_L.size < 40 and corners_C.size < 40:
-        print("---- Dart Not Detected -----")
-        return False, None, None, None
-    return True, corners_R, corners_L, corners_C
-
-def filtered_corner_detection(corners_R, corners_L, corners_C):
-    corners_f_R = filterCorners(corners_R)
-    corners_f_L = filterCorners(corners_L)
-    corners_f_C = filterCorners(corners_C)
-
-    if corners_f_R.size < 30 and corners_f_L.size < 30 and corners_f_C.size < 30:
-        print("---- Filtered Dart Not Detected -----")
-        return False, None, None, None
-    return True, corners_f_R, corners_f_L, corners_f_C
-
-def calculate_majority_score(camera_scores):
-    score_counts = {}
-    for score in camera_scores:
-        if score is not None:
-            score_counts[score] = score_counts.get(score, 0) + 1
-
-    if score_counts:
-        return max(score_counts, key=score_counts.get)
-
-    return None
 
 def get_score_coordinates(dart_coordinates, majority_camera_index):
     # Transform the dart coordinates to match the drawn dartboard
@@ -158,13 +81,25 @@ def takeout_procedure(cam_R, cam_L, cam_C, mode):
 
     start_time = time.time()
     # Wait for the specified delay to allow hand removal
-    while time.time() - start_time < TAKEOUT_DELAY:
+    while time.time() - start_time < constants['TAKEOUT_DELAY']:
         cam2gray(cam_R)
         cam2gray(cam_L)
         cam2gray(cam_C)
         time.sleep(0.1)
 
     print("Takeout procedure completed.")
+
+def calculate_score_from_coordinates(x, y, camera_index):
+    inverse_matrix = cv2.invert(perspective_matrices[camera_index])[1]
+    transformed_coords = cv2.perspectiveTransform(np.array([[[x, y]]], dtype=np.float32), inverse_matrix)[0][0]
+    transformed_x, transformed_y = transformed_coords
+
+    dx = transformed_x - center[0]
+    dy = transformed_y - center[1]
+    distance_from_center = math.sqrt(dx**2 + dy**2)
+    angle = math.atan2(dy, dx)
+    score = calculate_score(distance_from_center, angle)
+    return score
 
 def getRealLocation(corners_final, mount, prev_tip_point=None, blur=None, kalman_filter=None):
     if mount == "right":
@@ -190,6 +125,25 @@ def getRealLocation(corners_final, mount, prev_tip_point=None, blur=None, kalman
     
     return locationofdart, dart_tip
 
+def calculate_score(distance, angle):
+    if angle < 0:
+        angle += 2 * np.pi
+    sector_scores = [10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5, 20, 1, 18, 4, 13, 6]
+    sector_index = int(angle / (2 * np.pi) * 20)
+    base_score = sector_scores[sector_index]
+    if distance <= BULLSEYE_RADIUS_PX:
+        return 50
+    elif distance <= OUTER_BULL_RADIUS_PX:
+        return 25
+    elif TRIPLE_RING_INNER_RADIUS_PX < distance <= TRIPLE_RING_OUTER_RADIUS_PX:
+        return base_score * 3
+    elif DOUBLE_RING_INNER_RADIUS_PX < distance <= DOUBLE_RING_OUTER_RADIUS_PX:
+        return base_score * 2
+    elif distance <= DOUBLE_RING_OUTER_RADIUS_PX:
+        return base_score
+    else:
+        return 0
+        
 def find_dart_tip(skeleton, prev_tip_point, kalman_filter):
     # Find the contour of the skeleton
     contours, _ = cv2.findContours(skeleton, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -206,7 +160,7 @@ def find_dart_tip(skeleton, prev_tip_point, kalman_filter):
         lowest_point = max(dart_points, key=lambda x: x[1])
 
         # Adjust the tip coordinates by half of the tip's diameter
-        tip_radius_px = TIP_RADIUS_MM * PIXELS_PER_MM
+        tip_radius_px = constants['TIP_RADIUS_MM'] * constants['PIXELS_PER_MM']
 
         # Determine the adjustment direction based on the camera's perspective
         adjustment_direction = 0  # Adjust towards the dartboard center (negative direction)

@@ -27,6 +27,7 @@ class DartBoard:
         self.success = False
         self.db_cv = DartBoard_CV(cam_R,cam_L,cam_C) #call the constructor
         #TODO: call the LED constrcutor
+        #TODO: maybe pass in the app constructor (intialize it in main??)
 
 
     #TODO: Potentially have different run_loops for each game mode
@@ -37,7 +38,7 @@ class DartBoard:
         while self.success:
 
             self.db_cv.check_camera_working()
-            if self.db_cv.get_success_value():
+            if not self.db_cv.get_success_value():
                 break
 
             time.sleep(0.1)
@@ -47,23 +48,24 @@ class DartBoard:
             if found_movement:
                 time.sleep(0.2)
                 #confirmed to be a dart
-                if self.dart_detection():
+                if self.db_cv.dart_detection():
                     try:
-                        self.calculate_score()
+                        self.db_cv.calculate_score()
                         #TODO: add the turn on LED light here
                         #TODO: send the score update to the user app
                     except Exception as e:
                         print(f"Something went wrong in finding the dart's location: {str(e)}")
                         continue
                     # Update the reference frames after a dart has been detected
-                    self.success = self.update_reference_frame()
+                    self.success = self.db_cv.update_reference_frame()
                 else:
-                    #move to the next iteration
+                    #move to the next iteration (false movement)
                     continue
             else:
-                self.takeout_procedure()
+                self.db_cv.takeout_procedure()
             
-            self.display_score()
+            #plot the score on a GUI popup
+            self.db_cv.plot_score()
             #TODO: add option to correct the score on the app
         
-        self.destroy()
+        self.db_cv.destroy()
