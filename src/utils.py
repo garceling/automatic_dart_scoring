@@ -3,15 +3,15 @@ import sys
 import cv2
 import yaml
 from kalman_filter import KalmanFilter
-
+import numpy as np
 global constants
-global perspective_matrices = []
+global perspective_matrices
 
-with open("config/constants.yaml", "r") as file:
+with open("config/cv_constants.yaml", "r") as file:
     constants = yaml.safe_load(file)
 
 def load_perspective_matrices():
-    #perspective_matrices = []
+    perspective_matrices = []
     for camera_index in range(constants['NUM_CAMERAS']):
         try:
             data = np.load(f'perspective_matrix_camera_{camera_index}.npz')

@@ -12,9 +12,12 @@ import os
 import sys
 import time
 import cv2
-import numpy
 from kalman_filter import KalmanFilter
 from utils import *
+import numpy as np
+import math
+from shapely.geometry import Point, LineString, Polygon
+from typing import List
 
 class DartBoard_CV:
 
@@ -24,8 +27,8 @@ class DartBoard_CV:
         self.cam_R = cam_R
         self.cam_L = cam_L
         self.cam_C = cam_C
-        self.constants = load_constants()
-        self.camera_scores = [None] * constants['NUM_CAMERAS']  # Initialize camera_scores list
+        self.constants = self.load_constants()
+        #self.camera_scores = [None] * self.constants['NUM_CAMERAS']  # Initialize camera_scores list
         self.majority_score = None
         self.dart_coordinates = None
         self.prev_tip_point_R = None
@@ -38,7 +41,7 @@ class DartBoard_CV:
         self.thresh_C = None
         self.thresh_L = None
         self.thresh_R = None
-        self.dartboard_image = utils.draw_dartboard()
+        self.dartboard_image = draw_dartboard()
         self.perspective_matrices = []
         self.score_images = None
         self.kalman_filter_R = None
@@ -55,9 +58,9 @@ class DartBoard_CV:
         return self.success
 
     def update_reference_frame(self):
-        self.success, self.t_R = utils.cam2gray(self.cam_R)
-        _, self.t_L = utils.cam2gray(self.cam_L)
-        _, self.t_C = utils.cam2gray(self.cam_C)
+        self.success, self.t_R = cam2gray(self.cam_R)
+        _, self.t_L = cam2gray(self.cam_L)
+        _, self.t_C = cam2gray(self.cam_C)
         return self.success
 
     def check_camera_working(self):
@@ -70,7 +73,7 @@ class DartBoard_CV:
 
     def load_constants(self):
         # load yaml file with constant paramters
-        with open("config/constants.yaml", "r") as file:
+        with open("config/cv_constants.yaml", "r") as file:
             constants = yaml.safe_load(file)
 
     def initialize_test_cameras(self):
@@ -80,10 +83,10 @@ class DartBoard_CV:
         self.update_reference_frame()
     
     def cv_intilization(self):
-        initialize_test_cameras()
-        self.perspective_matrices = utils.load_perspective_matrices()
+        self.initialize_test_cameras()
+        self.perspective_matrices = load_perspective_matrices()
         # initialize Kalman filters for each camera
-        self.kalman_filter_R, self.kalman_filter_L, self.kalman_filter_C = utils.generate_kalman_filters()
+        self.kalman_filter_R, self.kalman_filter_L, self.kalman_filter_C = generate_kalman_filters()
         return self.success
 
     def check_thresholds(self):
@@ -92,9 +95,9 @@ class DartBoard_CV:
         a range of 1000-7500. This likely indicates a movement ( ie: dart being thrown). There is a upper 
         limit as that could be caused by too much noise/movement
         '''
-        self.thresh_R = utils.get_threshold(self.cam_R, self.t_R)
-        self.thresh_L = utils.get_treshold(self.cam_L, self.t_L)
-        self.thresh_C = utils.get_threshold(self.cam_C, self.t_C)
+        self.thresh_R = get_threshold(self.cam_R, self.t_R)
+        self.thresh_L = get_treshold(self.cam_L, self.t_L)
+        self.thresh_C = get_threshold(self.cam_C, self.t_C)
 
         non_zero_R = cv2.countNonZero(self.thresh_R)
         non_zero_L = cv2.countNonZero(self.thresh_L)
@@ -116,9 +119,9 @@ class DartBoard_CV:
         in the frame. It then detects corners (features) in the blurred frame to find the dart
         '''
 
-        corners_R = utils.getCorners(blur_R)
-        corners_L = utils.getCorners(blur_L)
-        corners_C = utils.getCorners(blur_C)
+        corners_R = getCorners(blur_R)
+        corners_L = getCorners(blur_L)
+        corners_C = getCorners(blur_C)
 
         if corners_R.size < 40 and corners_L.size < 40 and corners_C.size < 40:
             print("---- Dart Not Detected -----")
@@ -126,9 +129,9 @@ class DartBoard_CV:
         return True, corners_R, corners_L, corners_C
 
     def filtered_corner_detection(self,corners_R, corners_L, corners_C):
-        corners_f_R = utils.filterCorners(corners_R)
-        corners_f_L = utils.filterCorners(corners_L)
-        corners_f_C = utils.filterCorners(corners_C)
+        corners_f_R = filterCorners(corners_R)
+        corners_f_L = filterCorners(corners_L)
+        corners_f_C = filterCorners(corners_C)
 
         if corners_f_R.size < 30 and corners_f_L.size < 30 and corners_f_C.size < 30:
             print("---- Filtered Dart Not Detected -----")
@@ -137,9 +140,9 @@ class DartBoard_CV:
 
     def dart_detection(self):
         #applies frame subtraction
-        t_plus_R, self.blur_R = utils.diff2blur(cam_R, t_R)
-        t_plus_L, self.blur_L = utils.diff2blur(cam_L, t_L)
-        t_plus_C, self.blur_C = utils.diff2blur(cam_C, t_C)
+        t_plus_R, self.blur_R = diff2blur(cam_R, t_R)
+        t_plus_L, self.blur_L = diff2blur(cam_L, t_L)
+        t_plus_C, self.blur_C = diff2blur(cam_C, t_C)
 
         found_corner_detection, corners_R, corners_L, corners_C = self.corner_detection(blur_R, blur_L, blur_C)
         if not found_corner_detection:
@@ -151,11 +154,11 @@ class DartBoard_CV:
             return False
 
         rows, cols = blur_R.shape[:2]
-        self.corners_final_R = utils.filterCornersLine(corners_f_R, rows, cols)
+        self.corners_final_R = filterCornersLine(corners_f_R, rows, cols)
         rows, cols = blur_L.shape[:2]
-        self.corners_final_L = utils.filterCornersLine(corners_f_L, rows, cols)
+        self.corners_final_L = filterCornersLine(corners_f_L, rows, cols)
         rows, cols = blur_C.shape[:2]
-        self.corners_final_C = utils.filterCornersLine(corners_f_C, rows, cols)
+        self.corners_final_C = filterCornersLine(corners_f_C, rows, cols)
 
         #final dart detection
         _,self.thresh_R = cv2.threshold(blur_R, 60, 255, 0)
@@ -175,13 +178,13 @@ class DartBoard_CV:
             prev_tip_point = self.prev_tip_point_R
             kalman_filter = self.kalman_filter_R
             corners_final = self.corners_final_R
-        else if mount == "center":
+        elif mount == "center":
             loc = np.argmin(corners_final, axis=0)
             blur = self.blur_C
             prev_tip_point = self.prev_tip_point_C
             kalman_filter = self.kalman_filter_C    
             corners_final = self.corners_final_C
-        else if mount == "left":
+        elif mount == "left":
             loc = np.argmin(corners_final, axis=0)
             blur = self.blur_L
             prev_tip_point = self.prev_tip_point_L
@@ -241,11 +244,11 @@ class DartBoard_CV:
                 # Update the Kalman filter with the observed dart tip position
                 self.kalman_filter_R.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
             
-            else if mount == "center":
+            elif mount == "center":
                 predicted_tip = self.kalman_filter_C.predict()
                 self.kalman_filter_R.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
 
-            else if mount == "left":
+            elif mount == "left":
                 predicted_tip = self.kalman_filter_L.predict()
                 self.kalman_filter_L.update(np.array([[adjusted_tip_x], [adjusted_tip_y]]))
 
@@ -316,11 +319,7 @@ class DartBoard_CV:
             cv2.circle(dartboard_image_copy, (int(x), int(y)), 5, (0, 0, 255), -1)
         cv2.imshow('Dartboard', dartboard_image_copy)
 
-        key = cv2.waitKey(1) & 0xFF
 
-        # Check for 'q' (quit)
-        if key == ord('q'):
-            break
 
     def destroy(self):
         caps = []  # Define the variable "caps" as an empty list
@@ -332,9 +331,9 @@ class DartBoard_CV:
 
     def run_loop(self):
         initialize_test_cameras()
-        perspective_matrices = utils.load_perspective_matrices()
+        perspective_matrices = load_perspective_matrices()
         # initialize Kalman filters for each camera
-        kalman_filter_R, kalman_filter_L, kalman_filter_C = utils.generate_kalman_filters()
+        kalman_filter_R, kalman_filter_L, kalman_filter_C = generate_kalman_filters()
 
         while self.success:
             #attempts to read frame from each camera (check if camera work properly)

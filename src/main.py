@@ -3,12 +3,7 @@ import os
 import sys
 import argparse
 from calibrate import Calibration
-from refactor_darts import DartBoard
-
-
-def start_loop():
-    dartboard = DartBoard(cam_R, cam_L, cam_C)
-    dartboard.run_loop()
+from darts import DartBoard
 
 def main():
 
@@ -30,7 +25,8 @@ def main():
         print("Failed to open one or more cameras.")
         sys.exit()
     else:
-        start_loop()
+        dartboard = DartBoard(cam_R, cam_L, cam_C)
+        dartboard.run_loop()
 
 if __name__ == "__main__":
     main()

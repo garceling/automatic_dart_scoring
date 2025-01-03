@@ -14,6 +14,7 @@ import os
 import sys
 import yaml
 import cv2
+from darts_cv import DartBoard_CV
 
 class DartBoard:
 
@@ -66,6 +67,11 @@ class DartBoard:
             
             #plot the score on a GUI popup
             self.db_cv.plot_score()
+            key = cv2.waitKey(1) & 0xFF
+
+            # Check for 'q' (quit)
+            if key == ord('q'):
+                break
             #TODO: add option to correct the score on the app
         
         self.db_cv.destroy()

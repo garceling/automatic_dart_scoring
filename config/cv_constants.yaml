@@ -28,6 +28,6 @@ U_X: 0
 U_Y: 0
 X_STD_MEAS: 0.1
 Y_STD_MEAS: 0.1
-center: !!python/tuple
+center:
 - 320
 - 240
