@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from app_calibration import *
 import sqlite3
 import hashlib
 import random
@@ -12,6 +13,14 @@ app = Flask(__name__)
 
 # Set secret key for flask sessions 
 app.config['SECRET_KEY'] = 'banana'  # Replace with a secure key
+
+# Socket.IO event handlers
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+app.register_blueprint(calibration_bp)
+
+# pass in the websocket for the calibartion
+register_socketio_events(socketio)
 
 @contextmanager
 def get_db_connection_with_retry(max_attempts=5):
@@ -142,8 +151,6 @@ def cleanup_player_rooms(player_id, conn):
                 SET current_players = current_players - 1
                 WHERE id = ?
             ''', (room['id'],))
-
-
 
 
 def validate_dart_score(score, multiplier):
@@ -426,8 +433,6 @@ def create_room():
             
     return render_template('create_room.html')
 
-# Socket.IO event handlers
-socketio = SocketIO(app, cors_allowed_origins="*")
 
 @socketio.on('connect')
 def handle_connect():
