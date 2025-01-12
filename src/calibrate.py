@@ -91,3 +91,23 @@ class Calibration:
 
         print("Calibration completed successfully.")
 
+class Calibration_App:
+    def __init__(self):
+        self.constants = self.load_constants()
+
+    def load_constants(self):
+        with open("../config/cv_constants.yaml", "r") as file:
+            constants = yaml.safe_load(file)
+        return constants
+
+    def save_perspective_matrix(self, camera_index, points):
+        center = (self.constants['IMAGE_WIDTH'] // 2, self.constants['IMAGE_HEIGHT'] // 2)
+        drawn_points = np.float32([
+            [center[0], center[1] - self.constants['DOUBLE_RING_OUTER_RADIUS_PX']],
+            [center[0] + self.constants['DOUBLE_RING_OUTER_RADIUS_PX'], center[1]],
+            [center[0], center[1] + self.constants['DOUBLE_RING_OUTER_RADIUS_PX']],
+            [center[0] - self.constants['DOUBLE_RING_OUTER_RADIUS_PX'], center[1]],
+        ])
+        live_feed_points = points
+        M = cv2.getPerspectiveTransform(drawn_points, live_feed_points)
+        np.savez(f'../perspective_matrix_camera_{camera_index}.npz', matrix=M)
