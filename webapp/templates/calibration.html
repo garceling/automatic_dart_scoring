@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera WebSocket with Point Selection</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        #canvas-container {
+            position: relative;
+            display: inline-block;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        img {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>Camera Control</h1>
+
+    <!-- Camera selection -->
+    <label for="camera_index">Select Camera:</label>
+    <select id="camera_index">
+        {% for camera_id in camera_ids %}
+        <option value="{{ camera_id }}">{{ camera_id }}</option>
+        {% endfor %}
+    </select>
+    <button onclick="selectCamera()">Select Camera</button>
+
+    <!-- Image container -->
+    <div id="canvas-container">
+        <img id="snapshot" src="" alt="Captured Image">
+        <canvas id="overlay"></canvas>
+    </div>
+    <button id="submit-points" disabled onclick="submitPoints()">Submit Points</button>
+
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('overlay');
+        const ctx = canvas.getContext('2d');
+        const img = document.getElementById('snapshot');
+        const submitButton = document.getElementById('submit-points');
+        const selectedPoints = [];
+
+        // Select a camera
+        function selectCamera() {
+            const cameraIndex = document.getElementById('camera_index').value;
+            socket.emit('select_camera', { camera_index: parseInt(cameraIndex) });
+        }
+
+        // Handle successful camera selection
+        socket.on('success', (data) => {
+            alert(data.message);
+        });
+
+        // Handle errors
+        socket.on('error', (data) => {
+            alert(`Error: ${data.message}`);
+        });
+
+        // Handle received image
+        socket.on('image_captured', (data) => {
+            const imageUrl = data.image_url;
+            img.src = imageUrl;
+
+            // Adjust canvas size to match the image
+            img.onload = () => {
+                canvas.width = img.width;
+                canvas.height = img.height;
+            };
+
+            // Enable canvas for point selection
+            enablePointSelection();
+        });
+
+        // Enable point selection on the canvas
+        function enablePointSelection() {
+            selectedPoints.length = 0; // Reset points
+            submitButton.disabled = true;
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+            canvas.addEventListener('click', handleCanvasClick);
+        }
+
+        // Handle clicks on the canvas
+        function handleCanvasClick(event) {
+            if (selectedPoints.length >= 4) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = event.clientX - rect.left;
+            const y = event.clientY - rect.top;
+
+            selectedPoints.push({ x, y });
+
+            // Draw a circle at the selected point
+            ctx.fillStyle = 'red';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Enable submit button after 4 points
+            if (selectedPoints.length === 4) {
+                submitButton.disabled = false;
+                canvas.removeEventListener('click', handleCanvasClick); // Disable further clicks
+            }
+        }
+
+        // Submit points to the server
+        function submitPoints() {
+            socket.emit('submit_points', { points: selectedPoints });
+            alert('Points submitted!');
+        }
+
+        // Handle server response for submitted points
+        socket.on('points_saved', (data) => {
+            alert(data.message);
+        });
+    </script>
+</body>
+</html>

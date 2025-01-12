@@ -18,7 +18,7 @@ camera_index = None
 
 @app.route('/')
 def index():
-    return render_template('index.html', camera_ids=calibration.constants['CAMERA_ID'])
+    return render_template('calibration.html', camera_ids=calibration.constants['CAMERA_ID'])
 
 #selects camera + saves image for calibratoin in static folder
 @socketio.on('select_camera')

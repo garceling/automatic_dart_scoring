@@ -1,0 +1,9 @@
+To run the code, cd into the capstone director
+activate the virtual environment: source dartboard_env/bin/activate
+run the py file: python server.py
+
+link to the website is 192.168.2.84:5000
+
+test_account: Username: SuperMario12 , Password: Peach4ever , Email:supermario12@gmail.com
+
+SECRET_KEY: banana

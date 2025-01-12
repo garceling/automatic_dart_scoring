@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dart Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .game-container {
+            display: grid;
+            grid-template-columns: 3fr 1fr;
+            gap: 20px;
+        }
+
+        .game-board {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .player-list {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .player-item {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #ddd;
+        }
+
+        .player-item.current-turn {
+            border-left-color: #4CAF50;
+            background-color: #e8f5e9;
+        }
+
+        .score-display {
+            font-size: 48px;
+            margin: 20px 0;
+            font-weight: bold;
+            color: #333;
+        }
+
+        .game-info {
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .last-throw {
+            font-size: 24px;
+            margin: 10px 0;
+            color: #666;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .btn.leave {
+            background-color: #f44336;
+        }
+
+        .scoreboard {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .scoreboard th,
+        .scoreboard td {
+            padding: 8px;
+            border: 1px solid #ddd;
+            text-align: center;
+        }
+
+        .scoreboard th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+
+        .current-round {
+            background-color: #e8f5e9 !important;
+        }
+
+        .throw-indicator {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin: 10px 0;
+        }
+
+        .throw-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #ccc;
+            transition: background-color 0.3s;
+        }
+
+        .throw-dot.active {
+            background-color: #4CAF50;
+        }
+
+        .game-status {
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .game-status.waiting {
+            background-color: #fff3e0;
+            color: #e65100;
+        }
+
+        .game-status.active {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .game-status.finished {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+
+        .scoring-input {
+            padding: 8px;
+            margin: 0 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 16px;
+        }
+
+        .scoring-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        .manual-throw-control {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .throw-controls {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            position: relative;
+            background-color: white;
+            margin: 15% auto;
+            padding: 20px;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 8px;
+        }
+        
+        .override-controls {
+            margin-left: 10px;
+        }
+        
+        .button-group {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .form-group {
+            margin: 20px 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn.cancel {
+            background-color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-board">
+            <div class="game-info">
+                <h2>Game #<span id="gameId">-</span></h2>
+                <div>Game Type: <span id="gameType">501</span></div>
+                <div>Double Out: <span id="doubleOut">No</span></div>
+            </div>
+
+            <div id="gameStatus" class="game-status waiting">
+                Waiting for game to start...
+            </div>
+
+            <div class="score-display" id="currentScore">-</div>
+            
+            <div class="throw-indicator">
+                <div class="throw-dot" id="throw1"></div>
+                <div class="throw-dot" id="throw2"></div>
+                <div class="throw-dot" id="throw3"></div>
+            </div>
+
+            <div class="last-throw" id="lastThrow">Last throw: --</div>
+
+            <div class="throw-controls">
+                <button class="btn" id="throwButton" onclick="simulateThrow()">Simulate Throw</button>
+                
+                <div class="manual-throw-control">
+                    <select id="multiplierSelect" class="scoring-input">
+                        <option value="1">Single</option>
+                        <option value="2">Double</option>
+                        <option value="3">Triple</option>
+                    </select>
+                    <input type="number" 
+                           id="manualScoreInput" 
+                           class="scoring-input" 
+                           min="0" 
+                           max="60" 
+                           placeholder="Score"
+                           style="width: 80px;">
+                    <button class="btn" onclick="submitManualScore()">Enter Score</button>
+                </div>
+                
+                <div class="override-controls">
+                    <button class="btn" onclick="showOverrideModal()" id="overrideButton">
+                        Override Last Throw
+                    </button>
+                </div>
+                
+                <!-- Override Modal -->
+                <div id="overrideModal" class="modal">
+                    <div class="modal-content">
+                        <h3>Override Last Throw</h3>
+                        <div class="form-group">
+                            <select id="overrideMultiplier" class="scoring-input">
+                                <option value="1">Single</option>
+                                <option value="2">Double</option>
+                                <option value="3">Triple</option>
+                            </select>
+                            <input type="number" 
+                                   id="overrideScore" 
+                                   class="scoring-input" 
+                                   min="0" 
+                                   max="60" 
+                                   placeholder="New Score"
+                                   style="width: 80px;">
+                        </div>
+                        <div class="button-group">
+                            <button class="btn" onclick="submitOverride()">Update Score</button>
+                            <button class="btn cancel" onclick="hideOverrideModal()">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <button class="btn leave" onclick="leaveGame()">Leave Game</button>
+            </div>
+
+            <table class="scoreboard">
+                <thead>
+                    <tr>
+                        <th>Round</th>
+                        <th>Player</th>
+                        <th>1st</th>
+                        <th>2nd</th>
+                        <th>3rd</th>
+                        <th>Total</th>
+                        <th>Remaining</th>
+                    </tr>
+                </thead>
+                <tbody id="scoreboardBody"></tbody>
+            </table>
+        </div>
+
+        <div class="sidebar">
+            <div class="player-list" id="playerList">
+                <h3>Players</h3>
+                <!-- Players will be listed here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = io();
+        let gameActive = false;
+        let currentRound = 1;
+        let currentThrow = 1;
+        let isMyTurn = false;
+        let lastThrowData = null; // Store information about the last throw
+        
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('join_game', {});  // Pass empty object as data
+        });
+
+        function validateManualScore() {
+            const scoreInput = document.getElementById('manualScoreInput');
+            const score = parseInt(scoreInput.value);
+            const multiplierSelect = document.getElementById('multiplierSelect');
+            const multiplier = parseInt(multiplierSelect.value);
+            
+            // Clear previous error styling
+            scoreInput.style.borderColor = '';
+            
+            // Basic range validation
+            if (isNaN(score) || score < 0) {
+                scoreInput.style.borderColor = 'red';
+                return false;
+            }
+            
+            // Handle bull scores specially
+            if (score === 25) {
+                return multiplier <= 2; // Only single or double bull allowed
+            }
+            if (score === 50 && multiplier === 2) {
+                return true; // Double bull is valid
+            }
+            
+            // For regular scores, validate base score is 1-20
+            if (score > 20) {
+                scoreInput.style.borderColor = 'red';
+                return false;
+            }
+            
+            return true;
+        }
+
+        function submitManualScore() {
+            if (!gameActive) return;
+            if (!validateManualScore()) {
+                alert('Invalid score. Please check your input. Score must be 1-20 (or 25 for bull).');
+                return;
+            }
+            
+            const score = parseInt(document.getElementById('manualScoreInput').value);
+            const multiplier = parseInt(document.getElementById('multiplierSelect').value);
+            
+            // Special handling for bull
+            if (score === 25 || score === 50) {
+                socket.emit('throw_dart', {
+                    manual: true,
+                    score: score,
+                    multiplier: score === 50 ? 2 : 1
+                });
+            } else {
+                // For regular scores, send base score and multiplier separately
+                socket.emit('throw_dart', {
+                    manual: true,
+                    score: score,
+                    multiplier: multiplier
+                });
+            }
+        }
+        
+        socket.on('game_state_update', (data) => {
+            console.log('Game state update received:', data);
+            
+            // Activate game if we receive valid game data
+            if (data.game_id && data.current_score !== undefined) {
+                gameActive = true;
+                document.getElementById('gameStatus').className = 'game-status active';
+                document.getElementById('gameStatus').textContent = 'Game in progress';
+            }
+            
+            // Store last throw data when available
+            if (data.throw) {
+                lastThrowData = data.throw;
+            }
+            
+            // Update game info
+            document.getElementById('gameId').textContent = data.game_id;
+            document.getElementById('gameType').textContent = data.game_type;
+            document.getElementById('doubleOut').textContent = data.double_out_required ? 'Yes' : 'No';
+            
+            // Update current score if it's for this player
+            if (data.current_score !== undefined) {
+                document.getElementById('currentScore').textContent = data.current_score;
+            }
+            
+            // Update throw dots if round info exists
+            if (data.round_info) {
+                updateThrowDots(data.round_info);
+            }
+            
+            // Update last throw display
+            if (data.throw) {
+                document.getElementById('lastThrow').textContent = data.throw.is_bust ? 
+                    'Bust!' : 
+                    `Last throw: ${data.throw.score} (${data.throw.multiplier}x${data.throw.score/data.throw.multiplier})`;
+            }
+            
+            // Update player list and turn indicator
+            updatePlayerList(data.players, data.current_player);
+            
+            // Update scoreboard if round info exists
+            if (data.round_info) {
+                updateScoreboard(data.round_info, data.current_score);
+            }
+            
+            // Handle game over
+            if (data.game_over) {
+                gameActive = false;
+                document.getElementById('gameStatus').className = 'game-status finished';
+                document.getElementById('gameStatus').textContent = `Game Over! Winner: ${data.winner}`;
+                document.getElementById('throwButton').disabled = true;
+            }
+
+            if (data.potential_win) {
+                // Show confirmation dialog
+                const confirmWin = confirm("Winning throw! Do you want to override that throw?");
+                if (!confirmWin) {
+                    // Player confirms the win
+                    socket.emit('confirm_win', {
+                        game_id: data.game_id,
+                        throw: data.throw
+                    });
+                }
+                // If they click yes (want to override), they can use the existing override interface
+            }
+            
+            // Update display
+            document.getElementById('gameStatus').className = 
+                `game-status ${data.game_over ? 'finished' : 'active'}`;
+            document.getElementById('gameStatus').textContent = 
+                data.game_over ? `Game Over! Winner: ${data.winner}` : 'Game in progress';
+        });
+
+        function showOverrideModal() {
+            document.getElementById('overrideModal').style.display = 'block';
+            // Pre-fill with last throw data if available
+            if (lastThrowData) {
+                document.getElementById('overrideScore').value = lastThrowData.score;
+                document.getElementById('overrideMultiplier').value = lastThrowData.multiplier;
+            }
+        }
+        
+        function hideOverrideModal() {
+            document.getElementById('overrideModal').style.display = 'none';
+        }
+        
+        function submitOverride() {
+            const score = parseInt(document.getElementById('overrideScore').value);
+            const multiplier = parseInt(document.getElementById('overrideMultiplier').value);
+            
+            if (!validateScore(score)) {
+                alert('Invalid score. Please enter a valid number between 0 and 60.');
+                return;
+            }
+            
+            socket.emit('override_throw', {
+                score: score,
+                multiplier: multiplier
+            });
+            
+            hideOverrideModal();
+        }
+
+        function updateThrowDots(roundInfo) {
+            let throwCount = 0;
+            if (roundInfo.throw1_score !== null) throwCount++;
+            if (roundInfo.throw2_score !== null) throwCount++;
+            if (roundInfo.throw3_score !== null) throwCount++;
+            
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`throw${i}`).className = 
+                    `throw-dot${i <= throwCount ? ' active' : ''}`;
+            }
+        }
+        
+        function updatePlayerList(players, currentPlayer) {
+            const playerList = document.getElementById('playerList');
+            playerList.innerHTML = '<h3>Players</h3>';
+            
+            players.forEach(player => {
+                const playerItem = document.createElement('div');
+                playerItem.className = `player-item${player.username === currentPlayer ? ' current-turn' : ''}`;
+                playerItem.innerHTML = `
+                    <div>${player.username}${player.username === currentPlayer ? ' (Current Turn)' : ''}</div>
+                    <div>Score: ${player.score}</div>
+                `;
+                playerList.appendChild(playerItem);
+            });
+        }
+        
+        function updateScoreboard(roundInfo, currentScore) {
+            // Find existing row or create new one
+            let row = document.querySelector(`tr[data-round="${roundInfo.round_number}"][data-player="${roundInfo.player_name}"]`);
+            if (!row) {
+                row = document.createElement('tr');
+                row.setAttribute('data-round', roundInfo.round_number);
+                row.setAttribute('data-player', roundInfo.player_name);
+                document.getElementById('scoreboardBody').appendChild(row);
+            }
+
+            // Update row content
+            if (roundInfo.is_bust) {
+                row.innerHTML = `
+                    <td>${roundInfo.round_number}</td>
+                    <td>${roundInfo.player_name}</td>
+                    <td colspan="3">BUST</td>
+                    <td>-</td>
+                    <td>${currentScore}</td>
+                `;
+            } else {
+                row.innerHTML = `
+                    <td>${roundInfo.round_number}</td>
+                    <td>${roundInfo.player_name}</td>
+                    <td>${roundInfo.throw1_score || '-'}</td>
+                    <td>${roundInfo.throw2_score || '-'}</td>
+                    <td>${roundInfo.throw3_score || '-'}</td>
+                    <td>${roundInfo.round_total || '-'}</td>
+                    <td>${currentScore}</td>
+                `;
+            }
+
+            // Scroll to make the row visible
+            row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+        
+        function validateScore(score) {
+            if (isNaN(score) || score < 0 || score > 60) {
+                return false;
+            }
+            // Handle bull scores specially
+            if (score === 25 || score === 50) {
+                return true;
+            }
+            // Regular scores must be 1-20
+            return score <= 20;
+        }
+        
+        function simulateThrow() {
+            if (!gameActive) return;
+            console.log('Simulating throw...');
+            socket.emit('throw_dart');
+        }
+        
+        function leaveGame() {
+            if (confirm('Are you sure you want to leave the game?')) {
+                socket.emit('end_game');
+                window.location.href = '/rooms';
+            }
+        }
+
+        socket.on('error', (data) => {
+            console.error('Socket error:', data);
+            alert(data.message || 'An error occurred');
+        });
+
+        // Handle Enter key in manual score input
+        document.getElementById('manualScoreInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitManualScore();
+            }
+        });
+
+        // Handle Enter key in override score input
+        document.getElementById('overrideScore').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                submitOverride();
+            }
+        });
+
+        // Close modal if clicking outside
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('overrideModal')) {
+                hideOverrideModal();
+            }
+        }
+    </script>
+</body>
+</html>

@@ -3,123 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera WebSocket with Point Selection</title>
-    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <title>Welcome to Dartboard Game</title>
     <style>
-        #canvas-container {
-            position: relative;
-            display: inline-block;
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+            background-color: #f5f5f5;
         }
-        canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
         }
-        img {
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .btn {
+            margin: 10px;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #45a049;
+        }
+        .btn.multiplayer {
+            background-color: #2196F3;
+        }
+        .btn.multiplayer:hover {
+            background-color: #1976D2;
+        }
+        .btn.single-player {
+            background-color: #4CAF50;
+        }
+        .game-modes {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .game-modes.active {
             display: block;
+        }
+        .mode-title {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .auth-buttons {
+            margin-bottom: 30px;
+        }
+        .welcome-message {
+            font-size: 1.2em;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .flash {
+            margin: 10px auto;
+            padding: 10px;
+            max-width: 500px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .flash.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .flash.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
         }
     </style>
 </head>
 <body>
-    <h1>Camera Control</h1>
+    <div class="container">
+        <h1>Welcome to the Dartboard Game</h1>
+        
+        {% with messages = get_flashed_messages(with_categories=True) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
 
-    <!-- Camera selection -->
-    <label for="camera_index">Select Camera:</label>
-    <select id="camera_index">
-        {% for camera_id in camera_ids %}
-        <option value="{{ camera_id }}">{{ camera_id }}</option>
-        {% endfor %}
-    </select>
-    <button onclick="selectCamera()">Select Camera</button>
-
-    <!-- Image container -->
-    <div id="canvas-container">
-        <img id="snapshot" src="" alt="Captured Image">
-        <canvas id="overlay"></canvas>
+        {% if session.get('username') %}
+            <p class="welcome-message">Welcome, {{ session['username'] }}!</p>
+            
+            <div class="mode-selection">
+                <button class="btn single-player" onclick="window.location.href='/game'">Single Player</button>
+                <button class="btn multiplayer" onclick="window.location.href='/rooms'">Multiplayer</button>
+                <button class="btn" onclick="window.location.href='/logout'" style="background-color: #f44336;">Logout</button>
+            </div>
+        {% else %}
+            <p class="welcome-message">Please log in or register to play</p>
+            
+            <div class="auth-buttons">
+                <button class="btn" onclick="window.location.href='/login'">Login</button>
+                <button class="btn" onclick="window.location.href='/register'">Register</button>
+            </div>
+        {% endif %}
     </div>
-    <button id="submit-points" disabled onclick="submitPoints()">Submit Points</button>
-
-    <script>
-        const socket = io();
-        const canvas = document.getElementById('overlay');
-        const ctx = canvas.getContext('2d');
-        const img = document.getElementById('snapshot');
-        const submitButton = document.getElementById('submit-points');
-        const selectedPoints = [];
-
-        // Select a camera
-        function selectCamera() {
-            const cameraIndex = document.getElementById('camera_index').value;
-            socket.emit('select_camera', { camera_index: parseInt(cameraIndex) });
-        }
-
-        // Handle successful camera selection
-        socket.on('success', (data) => {
-            alert(data.message);
-        });
-
-        // Handle errors
-        socket.on('error', (data) => {
-            alert(`Error: ${data.message}`);
-        });
-
-        // Handle received image
-        socket.on('image_captured', (data) => {
-            const imageUrl = data.image_url;
-            img.src = imageUrl;
-
-            // Adjust canvas size to match the image
-            img.onload = () => {
-                canvas.width = img.width;
-                canvas.height = img.height;
-            };
-
-            // Enable canvas for point selection
-            enablePointSelection();
-        });
-
-        // Enable point selection on the canvas
-        function enablePointSelection() {
-            selectedPoints.length = 0; // Reset points
-            submitButton.disabled = true;
-            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
-
-            canvas.addEventListener('click', handleCanvasClick);
-        }
-
-        // Handle clicks on the canvas
-        function handleCanvasClick(event) {
-            if (selectedPoints.length >= 4) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = event.clientX - rect.left;
-            const y = event.clientY - rect.top;
-
-            selectedPoints.push({ x, y });
-
-            // Draw a circle at the selected point
-            ctx.fillStyle = 'red';
-            ctx.beginPath();
-            ctx.arc(x, y, 5, 0, Math.PI * 2);
-            ctx.fill();
-
-            // Enable submit button after 4 points
-            if (selectedPoints.length === 4) {
-                submitButton.disabled = false;
-                canvas.removeEventListener('click', handleCanvasClick); // Disable further clicks
-            }
-        }
-
-        // Submit points to the server
-        function submitPoints() {
-            socket.emit('submit_points', { points: selectedPoints });
-            alert('Points submitted!');
-        }
-
-        // Handle server response for submitted points
-        socket.on('points_saved', (data) => {
-            alert(data.message);
-        });
-    </script>
 </body>
 </html>

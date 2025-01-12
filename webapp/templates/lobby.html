@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Lobby</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .lobby-container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .room-info {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .player-list {
+            margin: 20px 0;
+        }
+
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .player-item .host-badge {
+            background-color: #ffd700;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            margin: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: #45a049;
+        }
+
+        .btn:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .btn.start {
+            background-color: #2196F3;
+        }
+
+        .btn.kick {
+            background-color: #f44336;
+            padding: 5px 10px;
+            font-size: 14px;
+        }
+
+        .btn.leave {
+            background-color: #f44336;
+        }
+
+        .flash {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+
+        .flash.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .flash.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .flash.info {
+            background-color: #e7f3fe;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="lobby-container">
+        <div class="room-info">
+            <h2>Room: <span id="roomName">{{ room_data.name }}</span></h2>
+            <div>Game Type: <span id="gameType">{{ room_data.game_type }}</span></div>
+            <div>Double Out Required: <span id="doubleOut">{{ 'Yes' if room_data.double_out_required else 'No' }}</span></div>
+        </div>
+
+        <div id="flashMessages"></div>
+
+        <h3>Players (<span id="playerCount">0</span>/<span id="maxPlayers">{{ room_data.max_players }}</span>)</h3>
+        <div class="player-list" id="playerList">
+            <!-- Players will be listed here -->
+        </div>
+
+        <div class="controls">
+            {% if session.get('user_id') == room_data.created_by %}
+                <button class="btn start" id="startButton" onclick="startGame()" disabled>Start Game</button>
+            {% endif %}
+            <button class="btn leave" onclick="leaveLobby()">Leave Lobby</button>
+        </div>
+    </div>
+
+    <script>
+        let socket = io();
+        const isHost = {{ 'true' if session.get('user_id') == room_data.created_by else 'false' }};
+        const roomId = {{ room_data.id }};
+        const currentUserId = {{ session.get('user_id') }};
+
+        socket.on('connect', () => {
+            console.log('Connected to server');
+            socket.emit('join_lobby', { room_id: roomId });
+        });
+
+        socket.on('lobby_update', (data) => {
+            console.log('Lobby update:', data);
+            updateLobbyInfo(data);
+        });
+
+        socket.on('game_started', (data) => {
+            console.log('Game started:', data);
+            window.location.href = '/game';
+        });
+
+        socket.on('error', (data) => {
+            console.error('Socket error:', data);
+            showFlash(data.message, 'error');
+        });
+
+        socket.on('player_kicked', (data) => {
+            if (data.player_id == currentUserId) {
+                // This player was kicked
+                alert('You have been kicked from the lobby');
+                socket.emit('leave_lobby', { 
+                    room_id: data.room_id,
+                    was_kicked: true
+                });
+                window.location.replace('/rooms');
+            } else {
+                // Another player was kicked
+                showFlash(`${data.username} has been kicked from the lobby`, 'success');
+            }
+        });
+
+        socket.on('player_left', (data) => {
+            showFlash(`${data.username} has left the lobby`, 'info');
+            // Force an immediate lobby state update
+            socket.emit('join_lobby', { room_id: roomId });
+        });
+
+        socket.on('lobby_closed', () => {
+            alert('The lobby has been closed');
+            window.location.replace('/rooms');
+        });
+
+        function updateLobbyInfo(data) {
+            document.getElementById('roomName').textContent = data.name;
+            document.getElementById('gameType').textContent = data.game_type;
+            document.getElementById('doubleOut').textContent = data.double_out_required ? 'Yes' : 'No';
+            document.getElementById('playerCount').textContent = data.current_players;
+            document.getElementById('maxPlayers').textContent = data.max_players;
+
+            const playerList = document.getElementById('playerList');
+            playerList.innerHTML = '';
+
+            data.players.forEach(player => {
+                const playerItem = document.createElement('div');
+                playerItem.className = 'player-item';
+                
+                const playerInfo = document.createElement('span');
+                playerInfo.textContent = player.username;
+                if (player.is_host) {
+                    const hostBadge = document.createElement('span');
+                    hostBadge.className = 'host-badge';
+                    hostBadge.textContent = 'Host';
+                    playerInfo.appendChild(hostBadge);
+                }
+                playerItem.appendChild(playerInfo);
+
+                if (isHost && !player.is_host) {
+                    const kickButton = document.createElement('button');
+                    kickButton.className = 'btn kick';
+                    kickButton.textContent = 'Kick';
+                    kickButton.onclick = () => kickPlayer(player.id);
+                    playerItem.appendChild(kickButton);
+                }
+
+                playerList.appendChild(playerItem);
+            });
+
+            if (isHost) {
+                const startButton = document.getElementById('startButton');
+                startButton.disabled = data.current_players < 2;
+            }
+        }
+
+        function startGame() {
+            console.log('Starting game...');
+            socket.emit('start_game', { room_id: roomId });
+        }
+
+        function kickPlayer(playerId) {
+            socket.emit('kick_player', { room_id: roomId, player_id: playerId });
+        }
+
+        function leaveLobby() {
+            if (isHost) {
+                if (confirm('Are you sure you want to close this lobby? This will remove all players.')) {
+                    socket.emit('close_lobby', { room_id: roomId });
+                }
+            } else {
+                socket.emit('leave_lobby', { 
+                    room_id: roomId,
+                    was_kicked: false
+                });
+            }
+            window.location.replace('/rooms');
+        }
+
+        function showFlash(message, type) {
+            const flashContainer = document.getElementById('flashMessages');
+            const flash = document.createElement('div');
+            flash.className = `flash ${type}`;
+            flash.textContent = message;
+            flashContainer.appendChild(flash);
+            setTimeout(() => flash.remove(), 5000);
+        }
+    </script>
+</body>
+</html>
