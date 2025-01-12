@@ -11,22 +11,16 @@ LED_COUNT      = NUM_STRIPS*NUM_LED_PER_STRIP      # Number of LED pixels per st
 LED_PIN        = 18      # GPIO pin connected to the pixels (18 uses PWM!).
 LED_FREQ_HZ    = 800000  # LED signal frequency in hertz (usually 800khz)
 LED_DMA        = 10      # DMA channel to use for generating signal (try 10)
-LED_BRIGHTNESS = 30     # Set to 0 for darkest and 255 for brightest
+LED_BRIGHTNESS = 240     # Set to 0 for darkest and 255 for brightest
 LED_INVERT     = False   # True to invert the signal (when using NPN transistor level shift)
 LED_CHANNEL    = 0       # set to '1' for GPIOs 13, 19, 41, 45 or 53
 
 NUM_RING = 0 
 TRPL_RING = 10
 DBL_RING = 1
-# Animation Functions
 
-def getSegIndexes(strip_num):
-    
-    start_seg = strip_num*NUM_LED_PER_STRIP
-    end_seg = start_seg + NUM_LED_PER_STRIP
-    
-    return start_seg, end_seg 
 
+# Base Functions
 def colorWipe(strip, strip_num, color, wait_ms=50):
     """Wipe color across display a pixel at a time."""
     start_seg, end_seg = getSegIndexes(strip_num) 
@@ -102,10 +96,11 @@ def innerSingleSeg(strip, strip_num, color, wait_ms=5):
     for i in range(start_seg, end_seg):
         strip.setPixelColor(i, color)
         strip.show()
-        time.sleep(wait_ms/1000.0)    
+        time.sleep(wait_ms/1000.0)
+
+            
         
-        
-# Main program logic follows:
+# Main program testing 
 if __name__ == '__main__':
     # Process arguments
     parser = argparse.ArgumentParser()
@@ -127,12 +122,15 @@ if __name__ == '__main__':
             strip_num = int(input("Enter the strip number: \n"))
             #colorWipe(strip, strip_num, Color(0,128,0), 5)
 
-            #numSeg(strip, strip_num, Color(0, 0, 255))
-            #tripleSeg(strip, strip_num, Color(0,128, 0))
-            #doubleSeg(strip, strip_num, Color(0,128, 0))
+            numSeg(strip, strip_num, Color(0, 0, 255))
+            tripleSeg(strip, strip_num, Color(0,128, 0))
+            doubleSeg(strip, strip_num, Color(0,128, 0))
             
             outerSingleSeg(strip, strip_num, Color(0, 0, 255))            
             innerSingleSeg(strip, strip_num, Color(255, 0, 0))
+            
+            strip.setBrightness(120) # test 
+            
 
 
 
