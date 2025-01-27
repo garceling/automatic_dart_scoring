@@ -18,6 +18,7 @@ import numpy as np
 import math
 from shapely.geometry import Point, LineString, Polygon
 from typing import List
+from simple_dart_data import DartDataManager #for getting dart info into web app.
 
 class DartBoard_CV:
 
@@ -274,7 +275,22 @@ class DartBoard_CV:
         self.dart_coordinates = tuple(map(int, transformed_coords))
 
 
-    def calculate_score(self):
+    def get_multiplier(self, distance: float) -> int: #Lawrence Added function
+        
+        #Determines the multiplier (1, 2, or 3) based on where the dart landed
+        
+        if distance <= self.constants['BULLSEYE_RADIUS_PX'] or distance <= self.constants['OUTER_BULL_RADIUS_PX']:
+            return 1  # Bull or Bullseye counts as single
+        elif (self.constants['TRIPLE_RING_INNER_RADIUS_PX'] < distance <= 
+              self.constants['TRIPLE_RING_OUTER_RADIUS_PX']):
+            return 3  # Triple
+        elif (self.constants['DOUBLE_RING_INNER_RADIUS_PX'] < distance <= 
+              self.constants['DOUBLE_RING_OUTER_RADIUS_PX']):
+            return 2  # Double
+        else:
+            return 1  # Single
+
+    def calculate_score(self): #changed by Lawrence
         locationofdart_R, self.prev_tip_point_R = self.getRealLocation("right")
         locationofdart_L, self.prev_tip_point_L = self.getRealLocation("left")
         locationofdart_C, self.prev_tip_point_C = self.getRealLocation("center")
@@ -287,6 +303,21 @@ class DartBoard_CV:
             majority_camera_index = self.camera_scores.index(self.majority_score)
             self.dart_coordinates = (locationofdart_R, locationofdart_L, locationofdart_C)[majority_camera_index]
             self.transform_score(majority_camera_index)
+
+            #additional code for getting multiplier
+            x, y = self.dart_coordinates
+            dx = x - self.constants['center'][0]
+            dy = y - self.constants['center'][1]
+            distance_from_center = math.sqrt(dx**2 + dy**2)
+
+            multiplier = self.get_multiplier(distance_from_center)
+            
+            self.data_manager.record_throw(
+                position=self.dart_coordinates,
+                score=self.majority_score,
+                multiplier=multiplier
+            )           
+            
             print(f"Final Score (Majority Rule): {self.majority_score}")
         else:
             print("No majority score found.")
