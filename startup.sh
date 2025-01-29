@@ -1,10 +1,10 @@
 #!/bin/bash
 
-VENV_PATH="/home/grace/Desktop/automatic_dart_scoring/venv"
+VENV_PATH="/home/benji/dartboard_env"
 
 if [ -d "$VENV_PATH" ]; then
     source "$VENV_PATH/bin/activate"
-    export PYTHONPATH="/home/grace/Desktop/automatic_dart_scoring"
+    export PYTHONPATH="/home/benji/dartboard_env/automatic_dart_scoring/webapp"
 
     # Print success messages
     echo "Virtual environment activated."
