@@ -40,8 +40,51 @@ def get_db_connection_with_retry(max_attempts=5):
                 raise
             print(f"Database locked, attempt {attempts} of {max_attempts}. Retrying...")
             time.sleep(0.5)
+        except Exception as e:
+            print(f"Database error: {e}")
+            raise
+        finally:
             if conn:
-                conn.close()
+                try:
+                    conn.commit()
+                    conn.close()
+                except Exception:
+                    pass
+                    
+def get_db_connection():
+    try:
+        conn = sqlite3.connect('dartboard.db', timeout=20)
+        conn.row_factory = sqlite3.Row
+        return conn
+    except sqlite3.OperationalError as e:
+        print(f"Database connection error: {e}")
+        raise
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        raise
+        
+        
+def execute_db_query(query, params=(), fetchone=False):
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        
+        if fetchone:
+            result = cursor.fetchone()
+        else:
+            result = cursor.fetchall()
+            
+        conn.commit()
+        return result
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise
+    finally:
+        if conn:
+            conn.close()
 
 # Hashing passwords securely
 def hash_password(password):
@@ -298,51 +341,70 @@ def game():
         return redirect(url_for('login'))
     
     try:
-        with get_db_connection_with_retry() as conn:
-            cursor = conn.cursor()
-            
-            # Get active game info
-            cursor.execute('''
-                SELECT g.*, r.id as room_id, r.game_type, r.double_out_required
-                FROM Games g
-                JOIN GameRooms r ON r.id = g.room_id
-                JOIN GamePlayers gp ON gp.game_id = r.id
-                WHERE gp.player_id = ? 
-                AND g.game_status = 'in_progress'
-                AND r.room_status = 'in_progress'
-                ORDER BY g.started_at DESC
-                LIMIT 1
-            ''', (session['user_id'],))
-            
-            game_data = cursor.fetchone()
-            
-            if not game_data:
-                flash('No active game found', 'error')
-                return redirect(url_for('rooms'))
-            
-            # Set current_room in session
-            session['current_room'] = game_data['room_id']
-            
-            # Get all players in the game
-            cursor.execute('''
-                SELECT p.username, gp.current_score, gp.player_position
-                FROM GamePlayers gp
-                JOIN Players p ON p.id = gp.player_id
-                WHERE gp.game_id = ?
-                ORDER BY gp.player_position
-            ''', (game_data['id'],))
-            
-            players = cursor.fetchall()
-            
-            return render_template('game.html', 
-                                game_data=game_data,
-                                players=players)
-            
-    except sqlite3.Error as e:
-        flash('Error accessing game', 'error')
-        return redirect(url_for('rooms'))
-            
-    except sqlite3.Error as e:
+        # Check for active game
+        game_data = execute_db_query('''
+            SELECT g.*, r.id as room_id, r.game_type, r.double_out_required
+            FROM Games g
+            JOIN GameRooms r ON r.id = g.room_id
+            JOIN GamePlayers gp ON gp.game_id = r.id
+            WHERE gp.player_id = ? 
+            AND g.game_status = 'in_progress'
+            AND r.room_status = 'in_progress'
+            ORDER BY g.started_at DESC
+            LIMIT 1
+        ''', (session['user_id'],), fetchone=True)
+
+        if not game_data:
+            # Create new single player game
+            conn = get_db_connection()
+            try:
+                cursor = conn.cursor()
+                
+                cursor.execute('''
+                    INSERT INTO GameRooms (name, created_by, game_type, double_out_required, 
+                                         current_players, room_status)
+                    VALUES (?, ?, ?, ?, 1, 'in_progress')
+                ''', (f"Single Player - {session['username']}", session['user_id'], 501, True))
+                room_id = cursor.lastrowid
+                
+                cursor.execute('''
+                    INSERT INTO Games (room_id, game_status)
+                    VALUES (?, 'in_progress')
+                ''', (room_id,))
+                game_id = cursor.lastrowid
+                
+                cursor.execute('''
+                    INSERT INTO GamePlayers (game_id, player_id, player_position, current_score)
+                    VALUES (?, ?, 0, 501)
+                ''', (room_id, session['user_id']))
+                
+                conn.commit()
+                
+                game_data = execute_db_query('''
+                    SELECT g.*, r.id as room_id, r.game_type, r.double_out_required
+                    FROM Games g
+                    JOIN GameRooms r ON r.id = g.room_id
+                    WHERE g.id = ?
+                ''', (game_id,), fetchone=True)
+            finally:
+                conn.close()
+
+        session['current_room'] = game_data['room_id']
+        
+        players = execute_db_query('''
+            SELECT p.username, gp.current_score, gp.player_position
+            FROM GamePlayers gp
+            JOIN Players p ON p.id = gp.player_id
+            WHERE gp.game_id = ?
+            ORDER BY gp.player_position
+        ''', (game_data['id'],))
+        
+        return render_template('game.html', 
+                            game_data=game_data,
+                            players=players)
+        
+    except Exception as e:
+        print(f"Error in game route: {e}")
         flash('Error accessing game', 'error')
         return redirect(url_for('rooms'))
 

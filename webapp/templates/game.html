@@ -13,6 +13,19 @@
             --shadow-color: rgba(0,0,0,0.1);
             --thick-shadow-color: rbga(0,0,0,0.5);
             --info-bg: #f8f9fa;
+            --player-bg-color: #f9f9f9;
+            --border-color: #ddd;
+            --score-input-border-color: #ccc;
+            --manual-throw-control-color: #f8f9fa;
+            --light-blue-bg: #e3f2fd;
+            --green: #4caf50;
+            --light-green-bg: #e8f5e9;
+            --dark-gray-text: #333;
+            --medium-gray: #666;
+            --dark-green: #45a049;
+            --light-gray: #ccc;
+            --red: #f44336;
+            --light-orange-bg: #fff3e0;
         }
         
         [data-theme="dark"] {
@@ -23,6 +36,19 @@
             --thick-shadow-color: rbga(255,255,255,0.5);
             --heading-color: #7dd3fc;
             --info-bg: #1e1e1e;
+            --player-bg-color: #363636;
+            --border-color: #444;
+            --score-input-border-color: #444;
+            --manual-throw-control-color: #363636;
+            --light-blue-bg: #1a2733;
+            --green: #50b654;
+            --light-green-bg: #1b3320;
+            --dark-gray-text: #e0e0e0;
+            --medium-gray: #a0a0a0;
+            --dark-green: #57c25c;
+            --light-gray: #444444;
+            --red: #ff5c5c;
+            --light-orange-bg: #332200;
         }        
         body {
             font-family: Arial, sans-serif;
@@ -58,21 +84,21 @@
         .player-item {
             padding: 10px;
             margin: 5px 0;
-            background-color: #f9f9f9;
+            background-color: var(--player-bg-color);
             border-radius: 4px;
-            border-left: 4px solid #ddd;
+            border-left: 4px solid var(--border-color);
         }
 
         .player-item.current-turn {
-            border-left-color: #4CAF50;
-            background-color: #e8f5e9;
+            border-left-color: var(--green);
+            background-color: var(--light-green-bg);
         }
 
         .score-display {
             font-size: 48px;
             margin: 20px 0;
             font-weight: bold;
-            color: #333;
+            color: var(--dark-gray-text);
         }
 
         .game-info {
@@ -86,7 +112,7 @@
         .last-throw {
             font-size: 24px;
             margin: 10px 0;
-            color: #666;
+            color: var(--medium-gray);
         }
 
         .btn {
@@ -94,24 +120,24 @@
             margin: 5px;
             font-size: 16px;
             cursor: pointer;
-            background-color: #4CAF50;
-            color: white;
+            background-color: var(--green);
+            color: var(--container-bg);
             border: none;
             border-radius: 4px;
             transition: background-color 0.3s;
         }
 
         .btn:hover {
-            background-color: #45a049;
+            background-color: var(--dark-green);
         }
 
         .btn:disabled {
-            background-color: #cccccc;
+            background-color: var(--light-gray);
             cursor: not-allowed;
         }
 
         .btn.leave {
-            background-color: #f44336;
+            background-color: var(--red);
         }
 
         .scoreboard {
@@ -123,7 +149,7 @@
         .scoreboard th,
         .scoreboard td {
             padding: 8px;
-            border: 1px solid #ddd;
+            border: 1px solid var(--border-color);
             text-align: center;
         }
 
@@ -133,7 +159,7 @@
         }
 
         .current-round {
-            background-color: #e8f5e9 !important;
+            background-color: var(--light-green-bg) !important;
         }
 
         .throw-indicator {
@@ -147,12 +173,12 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background-color: #ccc;
+            background-color: var(--light-gray);
             transition: background-color 0.3s;
         }
 
         .throw-dot.active {
-            background-color: #4CAF50;
+            background-color: var(--green);
         }
 
         .game-status {
@@ -164,31 +190,33 @@
         }
 
         .game-status.waiting {
-            background-color: #fff3e0;
+            background-color: var(--light-orange-bg);
             color: #e65100;
         }
 
         .game-status.active {
-            background-color: #e8f5e9;
+            background-color: var(--light-green-bg);
             color: #2e7d32;
         }
 
         .game-status.finished {
-            background-color: #e3f2fd;
+            background-color: var(--light-blue-bg);
             color: #1565c0;
         }
 
         .scoring-input {
             padding: 8px;
             margin: 0 5px;
-            border: 1px solid #ccc;
+            border: 1px solid var(--score-input-border-color);
+            background-color: var(--container-bg);
+            color: var(--text-color);
             border-radius: 4px;
             font-size: 16px;
         }
 
         .scoring-input:focus {
             outline: none;
-            border-color: #4CAF50;
+            border-color: var(--green);
         }
 
         .manual-throw-control {
@@ -197,7 +225,7 @@
             gap: 10px;
             margin: 10px 0;
             padding: 10px;
-            background-color: #f8f9fa;
+            background-color: var(--manual-throw-control-color);
             border-radius: 4px;
         }
 
@@ -247,7 +275,7 @@
         }
 
         .btn.cancel {
-            background-color: #f44336;
+            background-color: var(--red);
         }
         .theme-switch {
             position: fixed;
