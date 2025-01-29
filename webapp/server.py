@@ -7,6 +7,13 @@ import random
 from datetime import datetime
 import time
 from contextlib import contextmanager
+from enum import Enum
+from simple_dart_data import DartDataManager
+
+class DartMode(Enum):
+    SIMULATION = "simulation"
+    MANUAL = "manual"
+    CAMERA = "camera"
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -21,6 +28,10 @@ app.register_blueprint(calibration_bp)
 
 # pass in the websocket for the calibartion
 register_socketio_events(socketio)
+
+
+app.config['DART_MODE'] = DartMode.SIMULATION
+dart_data_manager = None
 
 @contextmanager
 def get_db_connection_with_retry(max_attempts=5):
@@ -913,8 +924,18 @@ def handle_throw_dart(data=None):
             
             print(f"Processing throw for game {game_state['id']}")
 
-            # Handle manual throw if provided
-            if data and data.get('manual'):
+            # Handle throw based on dart mode
+            if app.config['DART_MODE'] == DartMode.CAMERA and dart_data_manager is not None:
+                # Get throw from camera
+                current_throw = dart_data_manager.get_current_throw()
+                if current_throw is None:
+                    emit('error', {'message': 'No dart detected by camera'})
+                    return
+                score = current_throw.score
+                multiplier = current_throw.multiplier
+                bull_flag = current_throw.bull_flag
+            elif data and data.get('manual'):
+                # Handle manual throw
                 base_score = data.get('score')
                 multiplier = data.get('multiplier')
                 
@@ -1175,6 +1196,32 @@ def handle_throw_dart(data=None):
     except sqlite3.Error as e:
         print(f"Database error in handle_throw: {e}")
         emit('error', {'message': 'An error occurred while processing your throw'})
+
+
+
+@socketio.on('set_dart_mode')
+def handle_set_dart_mode(data):
+    if 'user_id' not in session:
+        emit('error', {'message': 'Not authenticated'})
+        return
+        
+    try:
+        new_mode = DartMode(data.get('mode'))
+        app.config['DART_MODE'] = new_mode
+        
+        global dart_data_manager
+        if new_mode == DartMode.CAMERA:
+            if dart_data_manager is None:
+                dart_data_manager = DartDataManager()
+        else:
+            dart_data_manager = None
+            
+        emit('dart_mode_changed', {
+            'mode': new_mode.value
+        }, broadcast=True)
+        
+    except (ValueError, KeyError):
+        emit('error', {'message': 'Invalid dart mode'})
 
 
 
