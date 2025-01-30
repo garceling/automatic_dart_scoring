@@ -6,15 +6,74 @@
 	<title>Register</title>
 	
 	<style>
-		body { font-family: Arial, sans-serif; text-align: center;}
-		h1 { color: #333; }
-		input { margin: 10px; padding: 10px; font-size: 1em; }
-		button {padding: 10px 20px; font-size: 1em; }
+	:root {
+            --bg-color: #f5f5f5;
+            --text-color: #333;
+            --container-bg: white;
+            --shadow-color: rgba(0,0,0,0.1);
+            --thick-shadow-color: rgba(0,0,0,0.5);
+            --info-bg: #f8f9fa;
+            --player-bg-color: #f9f9f9;
+            --border-color: #ddd;
+        }
+        
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --container-bg: #2d2d2d;
+            --shadow-color: rgba(255,255,255,0.1);
+            --thick-shadow-color: rgba(255,255,255,0.5);
+            --heading-color: #7dd3fc;
+            --info-bg: #1e1e1e;
+            --player-bg-color: #363636;
+            --border-color: #444;
+        } 
+		body { 
+			font-family: Arial, sans-serif; 
+			text-align: center;
+			background-color: var(--bg-color);
+			color: var(--text-color);
+		}
+		h1 { 
+			color: var(--text-color); 
+		}
+		input { 
+			margin: 10px; 
+			padding: 10px; 
+			font-size: 1em; 
+		}
+		button {
+			padding: 10px 20px; 
+			font-size: 1em; 
+		}
+		.theme-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .theme-switch input {
+            display: none;
+        }
+        .theme-switch label {
+            cursor: pointer;
+            padding: 8px 16px;
+            background: var(--container-bg);
+            border-radius: 20px;
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+            box-shadow: 0 2px 5px var(--shadow-color);
+        }
 	</style>
 	
 </head>
 
 <body>
+    <div class="theme-switch">
+            <input type="checkbox" id="theme-toggle">
+            <label for="theme-toggle">Light</label>
+    </div>
     <h1>Create an Account</h1>
     <form action="{{ url_for('register') }}" method="POST">
         <input type="text" name="username" placeholder="Username" required><br>
@@ -24,6 +83,29 @@
     </form>
 
     <p>Already have an account? <a href="{{ url_for('login') }}">Login here</a></p>
+    
+    <script>
+        const toggleSwitch = document.getElementById('theme-toggle');
+        const themeLabel = toggleSwitch.nextElementSibling;
+
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            toggleSwitch.checked = true;
+            themeLabel.textContent = 'Dark';
+        }
+
+        toggleSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                themeLabel.textContent = 'Dark';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                themeLabel.textContent = 'Light';
+            }
+        });
+    </script>
     
 </body>
 </html>

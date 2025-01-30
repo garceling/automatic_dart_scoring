@@ -6,25 +6,92 @@
     <title>Game Lobby</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --text-color: #333;
+            --container-bg: white;
+            --shadow-color: rgba(0,0,0,0.1);
+            --thick-shadow-color: rgba(0,0,0,0.5);
+            --info-bg: #f8f9fa;
+            --player-bg-color: #f9f9f9;
+            --border-color: #ddd;
+            --score-input-border-color: #ccc;
+            --manual-throw-control-color: #f8f9fa;
+            --light-blue-bg: #e3f2fd;
+            --green: #4caf50;
+            --light-green-bg: #e8f5e9;
+            --dark-gray-text: #333;
+            --medium-gray: #666;
+            --dark-green: #45a049;
+            --light-gray: #ccc;
+            --red: #f44336;
+            --light-orange-bg: #fff3e0;
+            --light-red-bg: #f8d7da;
+            --dark-red-txt: #721c24;
+            --light-red-border: #f5c6cb;
+            --light-green-bg-two: #d4edda;
+            --dark-green-text: #155724;
+            --light-green-border: #c8e6c9;
+            --primary-blue: #2196f3;
+            --bright-gold: #ffd700;
+            --light-blue-bg-two: #e7f3fe;
+            --dark-blue-text: #0c5460;
+            --light-blue-border: #bee5eb;
+        }
+        
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --container-bg: #2d2d2d;
+            --shadow-color: rgba(255,255,255,0.1);
+            --thick-shadow-color: rgba(255,255,255,0.5);
+            --heading-color: #7dd3fc;
+            --info-bg: #1e1e1e;
+            --player-bg-color: #363636;
+            --border-color: #444;
+            --score-input-border-color: #444;
+            --manual-throw-control-color: #363636;
+            --light-blue-bg: #1a2733;
+            --green: #50b654;
+            --light-green-bg: #1b3320;
+            --dark-gray-text: #e0e0e0;
+            --medium-gray: #a0a0a0;
+            --dark-green: #57c25c;
+            --light-gray: #444444;
+            --red: #ff5c5c;
+            --light-orange-bg: #332200;
+            --light-red-bg: #362222;
+            --dark-red-txt: #ff8a8a;
+            --light-red-border: #443333;
+            --light-green-bg-two: #1b3320;
+            --dark-green-text: #4caf50;
+            --light-green-border: #2d4a2e;
+            --primary-blue: #64b5f6;
+            --bright-gold: #ffc400;
+            --light-blue-bg-two: #1a2733;
+            --dark-blue-text: #7dcde9;
+            --light-blue-border: #2a3f4a;
+        }
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
             margin: 0 auto;
             padding: 20px;
-            background-color: #f5f5f5;
+            background-color: var(--bg-color);
+            color: var(--text-color);
         }
 
         .lobby-container {
-            background-color: white;
+            background-color: var(--container-bg);
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px var(--shadow-color);
         }
 
         .room-info {
             margin-bottom: 20px;
             padding: 15px;
-            background-color: #f8f9fa;
+            background-color: var(--info-bg);
             border-radius: 4px;
         }
 
@@ -38,12 +105,12 @@
             align-items: center;
             padding: 10px;
             margin: 5px 0;
-            background-color: #f8f9fa;
+            background-color: var(--info-bg);
             border-radius: 4px;
         }
 
         .player-item .host-badge {
-            background-color: #ffd700;
+            background-color: var(--bright-gold);
             padding: 2px 8px;
             border-radius: 12px;
             font-size: 0.8em;
@@ -55,34 +122,34 @@
             margin: 5px;
             font-size: 16px;
             cursor: pointer;
-            background-color: #4CAF50;
-            color: white;
+            background-color: var(--green);
+            color: var(--container-bg);
             border: none;
             border-radius: 4px;
             transition: background-color 0.3s;
         }
 
         .btn:hover {
-            background-color: #45a049;
+            background-color: var(--dark-green);
         }
 
         .btn:disabled {
-            background-color: #cccccc;
+            background-color: var(--light-gray);
             cursor: not-allowed;
         }
 
         .btn.start {
-            background-color: #2196F3;
+            background-color: var(--primary-blue);
         }
 
         .btn.kick {
-            background-color: #f44336;
+            background-color: var(--red);
             padding: 5px 10px;
             font-size: 14px;
         }
 
         .btn.leave {
-            background-color: #f44336;
+            background-color: var(--red);
         }
 
         .flash {
@@ -91,27 +158,50 @@
             border-radius: 4px;
         }
 
-        .flash.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        flash.error {
+            background-color: var(--light-red-bg);
+            color: var(--dark-red-txt);
+            border: 1px solid var(--light-red-border);
         }
 
         .flash.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+            background-color: var(--light-green-bg-two);
+            color: var(--dark-green-text);
+            border: 1px solid var(--light-green-border);
         }
 
         .flash.info {
-            background-color: #e7f3fe;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
+            background-color: var(--light-blue-bg-two);
+            color: var(--dark-blue-text);
+            border: 1px solid var(--light-blue-border);
+        }
+        .theme-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .theme-switch input {
+            display: none;
+        }
+        .theme-switch label {
+            cursor: pointer;
+            padding: 8px 16px;
+            background: var(--container-bg);
+            border-radius: 20px;
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+            box-shadow: 0 2px 5px var(--shadow-color);
         }
     </style>
 </head>
 <body>
     <div class="lobby-container">
+        <div class="theme-switch">
+            <input type="checkbox" id="theme-toggle">
+            <label for="theme-toggle">Light</label>
+        </div>
         <div class="room-info">
             <h2>Room: <span id="roomName">{{ room_data.name }}</span></h2>
             <div>Game Type: <span id="gameType">{{ room_data.game_type }}</span></div>
@@ -134,6 +224,27 @@
     </div>
 
     <script>
+        const toggleSwitch = document.getElementById('theme-toggle');
+        const themeLabel = toggleSwitch.nextElementSibling;
+
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            toggleSwitch.checked = true;
+            themeLabel.textContent = 'Dark';
+        }
+
+        toggleSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                themeLabel.textContent = 'Dark';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                themeLabel.textContent = 'Light';
+            }
+        });
+        
         let socket = io();
         const isHost = {{ 'true' if session.get('user_id') == room_data.created_by else 'false' }};
         const roomId = {{ room_data.id }};

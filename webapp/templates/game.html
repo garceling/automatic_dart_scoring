@@ -11,7 +11,7 @@
             --text-color: #333;
             --container-bg: white;
             --shadow-color: rgba(0,0,0,0.1);
-            --thick-shadow-color: rbga(0,0,0,0.5);
+            --thick-shadow-color: rgba(0,0,0,0.5);
             --info-bg: #f8f9fa;
             --player-bg-color: #f9f9f9;
             --border-color: #ddd;
@@ -26,6 +26,9 @@
             --light-gray: #ccc;
             --red: #f44336;
             --light-orange-bg: #fff3e0;
+            --orange: #e65100;
+            --dark-green-two: #2e7d32;
+            --dark-blue: #1565c0;
         }
         
         [data-theme="dark"] {
@@ -33,7 +36,7 @@
             --text-color: #ffffff;
             --container-bg: #2d2d2d;
             --shadow-color: rgba(255,255,255,0.1);
-            --thick-shadow-color: rbga(255,255,255,0.5);
+            --thick-shadow-color: rgba(255,255,255,0.5);
             --heading-color: #7dd3fc;
             --info-bg: #1e1e1e;
             --player-bg-color: #363636;
@@ -49,6 +52,9 @@
             --light-gray: #444444;
             --red: #ff5c5c;
             --light-orange-bg: #332200;
+            --orange: #ff8f3c;
+            --dark-green-two: #4caf50;
+            --dark-blue: #64b5f6;
         }        
         body {
             font-family: Arial, sans-serif;
@@ -191,17 +197,17 @@
 
         .game-status.waiting {
             background-color: var(--light-orange-bg);
-            color: #e65100;
+            color: var(--orange);
         }
 
         .game-status.active {
             background-color: var(--light-green-bg);
-            color: #2e7d32;
+            color: var(--dark-green-two);
         }
 
         .game-status.finished {
             background-color: var(--light-blue-bg);
-            color: #1565c0;
+            color: var(--dark-blue);
         }
 
         .scoring-input {

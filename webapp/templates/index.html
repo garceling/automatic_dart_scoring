@@ -5,14 +5,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Welcome to Dartboard Game</title>
     <style>
+        :root {
+            --bg-color: #f5f5f5;
+            --text-color: #333;
+            --container-bg: white;
+            --shadow-color: rgba(0,0,0,0.1);
+            --thick-shadow-color: rgba(0,0,0,0.5);
+            --info-bg: #f8f9fa;
+            --player-bg-color: #f9f9f9;
+            --border-color: #ddd;
+            --score-input-border-color: #ccc;
+            --manual-throw-control-color: #f8f9fa;
+            --light-blue-bg: #e3f2fd;
+            --green: #4caf50;
+            --light-green-bg: #e8f5e9;
+            --dark-gray-text: #333;
+            --medium-gray: #666;
+            --dark-green: #45a049;
+            --light-gray: #ccc;
+            --red: #f44336;
+            --light-orange-bg: #fff3e0;
+            --light-red-bg: #f8d7da;
+            --dark-red-txt: #721c24;
+            --light-red-border: #f5c6cb;
+            --light-green-bg-two: #d4edda;
+            --dark-green-text: #155724;
+            --light-green-border: #c8e6c9;
+            --primary-blue: #2196f3;
+            --medium-blue: #1976d2;
+            --calibrate-color: #dfc5fe;
+            --logout-color: #f44336;
+        }
+        
+        [data-theme="dark"] {
+            --bg-color: #1a1a1a;
+            --text-color: #ffffff;
+            --container-bg: #2d2d2d;
+            --shadow-color: rgba(255,255,255,0.1);
+            --thick-shadow-color: rgba(255,255,255,0.5);
+            --heading-color: #7dd3fc;
+            --info-bg: #1e1e1e;
+            --player-bg-color: #363636;
+            --border-color: #444;
+            --score-input-border-color: #444;
+            --manual-throw-control-color: #363636;
+            --light-blue-bg: #1a2733;
+            --green: #50b654;
+            --light-green-bg: #1b3320;
+            --dark-gray-text: #e0e0e0;
+            --medium-gray: #a0a0a0;
+            --dark-green: #57c25c;
+            --light-gray: #444444;
+            --red: #ff5c5c;
+            --light-orange-bg: #332200;
+            --light-red-bg: #362222;
+            --dark-red-txt: #ff8a8a;
+            --light-red-border: #443333;
+            --light-green-bg-two: #1b3320;
+            --dark-green-text: #4caf50;
+            --light-green-border: #2d4a2e;
+            --primary-blue: #64b5f6;
+            --medium-blue: #42a5f5;
+            --calibrate-color: #b794d4;
+            --logout-color: #ff5c5c;
+        }
         body {
             font-family: Arial, sans-serif;
             text-align: center;
             margin-top: 50px;
-            background-color: #f5f5f5;
+            background-color: var(--bg-color);
+            color: var(--text-color);
         }
         h1 {
-            color: #333;
+            color: var(--text-color);
             margin-bottom: 30px;
         }
         .container {
@@ -24,38 +89,44 @@
             margin: 10px;
             padding: 15px 30px;
             font-size: 1.2em;
-            background-color: #4CAF50;
-            color: white;
+            background-color: var(--green);
+            color: var(--container-bg);
             border: none;
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
         }
+        .btn.calibrate {
+            background-color: var(--calibrate-color);
+        }
+        .btn.logout {
+            background-color: var(--logout-color);
+        }
         .btn:hover {
-            background-color: #45a049;
+            background-color: var(--dark-green);
         }
         .btn.multiplayer {
-            background-color: #2196F3;
+            background-color: var(--primary-blue);
         }
         .btn.multiplayer:hover {
-            background-color: #1976D2;
+            background-color: var(--medium-blue);
         }
         .btn.single-player {
-            background-color: #4CAF50;
+            background-color: var(--green);
         }
         .game-modes {
             display: none;
             margin-top: 20px;
             padding: 20px;
-            background-color: white;
+            background-color: var(--container-bg);
             border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 5px var(--shadow-color);
         }
         .game-modes.active {
             display: block;
         }
         .mode-title {
-            color: #333;
+            color: var(--text-color);
             margin-bottom: 20px;
         }
         .auth-buttons {
@@ -63,7 +134,7 @@
         }
         .welcome-message {
             font-size: 1.2em;
-            color: #333;
+            color: var(--text-color);
             margin-bottom: 20px;
         }
         .flash {
@@ -73,20 +144,44 @@
             border-radius: 5px;
             text-align: center;
         }
-        .flash.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        flash.error {
+            background-color: var(--light-red-bg);
+            color: var(--dark-red-txt);
+            border: 1px solid var(--light-red-border);
         }
-        .flash.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+
+        .flash.success {
+            background-color: var(--light-green-bg-two);
+            color: var(--dark-green-text);
+            border: 1px solid var(--light-green-border);
+        }
+        .theme-switch {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+        .theme-switch input {
+            display: none;
+        }
+        .theme-switch label {
+            cursor: pointer;
+            padding: 8px 16px;
+            background: var(--container-bg);
+            border-radius: 20px;
+            display: inline-block;
+            min-width: 60px;
+            text-align: center;
+            box-shadow: 0 2px 5px var(--shadow-color);
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <div class="theme-switch">
+            <input type="checkbox" id="theme-toggle">
+            <label for="theme-toggle">Light</label>
+        </div>
         <h1>Welcome to the Dartboard Game</h1>
         
         {% with messages = get_flashed_messages(with_categories=True) %}
@@ -103,8 +198,8 @@
             <div class="mode-selection">
                 <button class="btn single-player" onclick="window.location.href='/game'">Single Player</button>
                 <button class="btn multiplayer" onclick="window.location.href='/rooms'">Multiplayer</button>
-                <button class="btn calibrate" onclick="window.location.href='/calibrate'" style="background-color: #dfc5fe;">Calibrate</button>
-                <button class="btn" onclick="window.location.href='/logout'" style="background-color: #f44336;">Logout</button>
+                <button class="btn calibrate" onclick="window.location.href='/calibrate'">Calibrate</button>
+                <button class="btn logout" onclick="window.location.href='/logout'">Logout</button>
             </div>
         {% else %}
             <p class="welcome-message">Please log in or register to play</p>
@@ -115,5 +210,28 @@
             </div>
         {% endif %}
     </div>
+    
+    <script>
+        const toggleSwitch = document.getElementById('theme-toggle');
+        const themeLabel = toggleSwitch.nextElementSibling;
+
+        if (localStorage.getItem('theme') === 'dark') {
+            document.documentElement.setAttribute('data-theme', 'dark');
+            toggleSwitch.checked = true;
+            themeLabel.textContent = 'Dark';
+        }
+
+        toggleSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                themeLabel.textContent = 'Dark';
+            } else {
+                document.documentElement.setAttribute('data-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                themeLabel.textContent = 'Light';
+            }
+        });
+    </script>
 </body>
 </html>
