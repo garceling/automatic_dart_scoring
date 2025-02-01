@@ -18,7 +18,7 @@ class DartDetection:
 
         single_score = random.choice(dartboard_numbers)
 
-        if single_score == 25: #no tirple for buleeseye
+        if single_score == 25: #no triple for bullseye
             is_double = random.choice([True, False]) 
             return (single_score, is_double, False)
      
