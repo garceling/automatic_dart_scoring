@@ -275,21 +275,20 @@ class DartBoard_CV:
         self.dart_coordinates = tuple(map(int, transformed_coords))
 
 
-    def get_multiplier_and_bull_flag(self, distance: float) -> Tuple[int, bool]:
+    def get_multiplier(self, distance: float) -> int: #Lawrence Added function
         
-        #Determines the multiplier and if throw is in bull/bullseye
-        #Returns: (multiplier, bull_flag)
+        #Determines the multiplier (1, 2, or 3) based on where the dart landed
         
         if distance <= self.constants['BULLSEYE_RADIUS_PX'] or distance <= self.constants['OUTER_BULL_RADIUS_PX']:
-            return 1, True  # Bull or Bullseye: single multiplier and bull flag True
+            return 1  # Bull or Bullseye counts as single
         elif (self.constants['TRIPLE_RING_INNER_RADIUS_PX'] < distance <= 
               self.constants['TRIPLE_RING_OUTER_RADIUS_PX']):
-            return 3, False  # Triple
+            return 3  # Triple
         elif (self.constants['DOUBLE_RING_INNER_RADIUS_PX'] < distance <= 
               self.constants['DOUBLE_RING_OUTER_RADIUS_PX']):
-            return 2, False  # Double
+            return 2  # Double
         else:
-            return 1, False  # Single
+            return 1  # Single
 
     def calculate_score(self): #changed by Lawrence
         locationofdart_R, self.prev_tip_point_R = self.getRealLocation("right")
@@ -311,13 +310,12 @@ class DartBoard_CV:
             dy = y - self.constants['center'][1]
             distance_from_center = math.sqrt(dx**2 + dy**2)
 
-            multiplier, bull_flag = self.get_multiplier_and_bull_flag(distance_from_center)
+            multiplier = self.get_multiplier(distance_from_center)
             
             self.data_manager.record_throw(
                 position=self.dart_coordinates,
                 score=self.majority_score,
-                multiplier=multiplier,
-                bull_flag=bull_flag
+                multiplier=multiplier
             )           
             
             print(f"Final Score (Majority Rule): {self.majority_score}")

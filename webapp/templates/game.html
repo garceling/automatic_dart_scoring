@@ -252,14 +252,6 @@
 
             <div class="last-throw" id="lastThrow">Last throw: --</div>
 
-            <div class="mode-selection"> 
-                <select id="dartMode" onchange="switchDartMode(this.value)" class="scoring-input">
-                    <option value="simulation">Simulation Mode</option>
-                    <option value="manual">Manual Mode</option>
-                    <option value="camera">Camera Mode</option>
-                </select>
-            </div>
-
             <div class="throw-controls">
                 <button class="btn" id="throwButton" onclick="simulateThrow()">Simulate Throw</button>
                 
@@ -624,36 +616,6 @@
                 hideOverrideModal();
             }
         }
-
-        //code below is for integrating cv into web app
-        let currentDartMode = 'simulation';
-
-        function switchDartMode(mode) {
-            socket.emit('set_dart_mode', { mode: mode });
-        }
-
-        socket.on('dart_mode_changed', (data) => {
-            currentDartMode = data.mode;
-            updateDartModeUI();
-        });
-
-        function updateDartModeUI() {
-            // Update UI elements based on mode
-            const simulateBtn = document.getElementById('throwButton');
-            const manualControls = document.querySelector('.manual-throw-control');
-            
-            if (currentDartMode === 'camera') {
-                simulateBtn.style.display = 'none';
-                manualControls.style.display = 'none';
-            } else if (currentDartMode === 'manual') {
-                simulateBtn.style.display = 'none';
-                manualControls.style.display = 'flex';
-            } else { // simulation
-                simulateBtn.style.display = 'inline';
-                manualControls.style.display = 'flex';
-            }
-        }
-
     </script>
 </body>
 </html>
