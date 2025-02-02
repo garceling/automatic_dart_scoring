@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Dartboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.js"></script>
+</head>
+<body>
+    <h1>Smart Dartboard</h1>
+
+    <!-- Buttons to start/stop the CV loop -->
+    <button onclick="startGame()">Start Game</button>
+    <button onclick="stopGame()">Stop Game</button>
+
+    <h2>Game Status: <span id="gameStatus">Waiting...</span></h2>
+    <h2>CV Initilaztion Status: <span id="initStatus">Waiting...</span></h2>
+    <h2>Detected Scores:</h2>
+    <ul id="scoreList"></ul>
+
+    <script>
+        var socket = io.connect('http://' + document.domain + ':' + location.port);
+
+        function startGame() {
+            socket.emit('start_game'); // Send request to start CV loop
+        }
+
+        function stopGame() {
+            socket.emit('stop_game'); // Send request to stop CV loop
+        }
+
+        // Listen for game status updates (e.g., game started, stopped, errors)
+        socket.on('game_status', function(data) {
+            document.getElementById('gameStatus').innerText = data.message;
+        });
+
+        // inditciotn of wheter the cv initization is done
+        socket.on('cvinit_status', function(data) {
+            document.getElementById('initStatus').innerText = data.cvInit;
+        });
+
+        // Listen for detected dart scores and update the UI
+        socket.on('dart_detected', function(data) {
+            let listItem = document.createElement('li');
+            listItem.innerHTML = `Dart Single Score: ${data.score} - Is_Double: ${data.is_double} - Is_Triple: ${data.is_triple}`;
+            document.getElementById('scoreList').appendChild(listItem);
+        });
+
+        socket.on('connect', function() {
+            console.log("Connected to server");
+        });
+
+        socket.on('disconnect', function() {
+            console.log("Disconnected from server");
+        });
+    </script>
+</body>
+</html>
