@@ -17,7 +17,7 @@ class LEDs:
         # LED strip configuration:
         self.NUM_STRIPS = 5
         self.NUM_LED_PER_STRIP = 19
-        self.LED_COUNT      = NUM_STRIPS*NUM_LED_PER_STRIP      # Number of LED pixels per strip
+        self.LED_COUNT      = self.NUM_STRIPS*self.NUM_LED_PER_STRIP      # Number of LED pixels per strip
 
         self.LED_PIN        = 18      # GPIO pin connected to the pixels (18 uses PWM!).
         self.LED_FREQ_HZ    = 800000  # LED signal frequency in hertz (usually 800khz)
@@ -37,88 +37,95 @@ class LEDs:
         )
         self.strip.begin()
 
-        # Sweep colors across strip     
-        def colorWipe(self, strip, strip_num, color, wait_ms=50):
-            start_seg, end_seg = getSegIndexes(strip_num) 
-            for i in range(start_seg, end_seg):
-                strip.setPixelColor(i, color)
-                strip.show()
-                time.sleep(wait_ms/1000.0)
-
-        # Turn off all LEDs
-        def clearAll(self, strip, wait_ms=1): 
-            for i in range(strip.numPixels()):
-                strip.setPixelColor(i, Color(0,0,0))
-                strip.show()
-                time.sleep(wait_ms/1000.0)
-
-        # Lights up number segment on outer circumference of dartboard 
-        def numSeg(self, strip, strip_num, color, wait_ms=5):
-            # light up number segment outside of dartboard
-            if(strip_num % 2 == 0): #even num strip 
-                pixel = NUM_RING + NUM_LED_PER_STRIP*strip_num
-            else: # odd num strip 
-                pixel = NUM_LED_PER_STRIP*strip_num + (NUM_LED_PER_STRIP - 1)
-                
-            strip.setPixelColor(pixel, color)
-            strip.show()
-            time.sleep(wait_ms/1000.0)
-            
-        # Lights up triple segment 
-        def tripleSeg(self, strip, strip_num, color, wait_ms=5):
-            # light up triple segment
-            if(strip_num % 2 == 0): #even num strip 
-                pixel = TRPL_RING + NUM_LED_PER_STRIP*strip_num
-            else: # odd num strip 
-                pixel = NUM_LED_PER_STRIP*strip_num + (NUM_LED_PER_STRIP - TRPL_RING - 1)
-            
-            strip.setPixelColor(pixel, color)
-            strip.show()
-            time.sleep(wait_ms/1000.0)
-            
-        # Lights up double segment 
-        def doubleSeg(self, strip, strip_num, color, wait_ms=5):
-            # light up triple segment
-            if(strip_num % 2 == 0): #even num strip 
-                pixel = DBL_RING + NUM_LED_PER_STRIP*strip_num
-            else: # odd num strip 
-                pixel = NUM_LED_PER_STRIP*strip_num + (NUM_LED_PER_STRIP - DBL_RING - 1)
-            
-            strip.setPixelColor(pixel, color)
-            strip.show()
+    def getSegIndexes(self, strip_num):
+    
+        start_seg = strip_num*self.NUM_LED_PER_STRIP
+        end_seg = start_seg + self.NUM_LED_PER_STRIP
+        
+        return start_seg, end_seg 
+    
+    # Sweep colors across strip     
+    def colorWipe(self, strip_num, color, wait_ms=50):
+        start_seg, end_seg = self.getSegIndexes(strip_num) 
+        for i in range(start_seg, end_seg):
+            self.strip.setPixelColor(i, color)
+            self.strip.show()
             time.sleep(wait_ms/1000.0)
 
-        # Lights up outer single segment (closest to circumference)
-        def outerSingleSeg(self, strip, strip_num, color, wait_ms=5):
-            
-            if(strip_num % 2 == 0): #even num strip 
-                start_seg = (DBL_RING + NUM_LED_PER_STRIP*strip_num) + 1
-                end_seg = TRPL_RING + NUM_LED_PER_STRIP*strip_num
-            else: # odd num strip
-                end_seg = NUM_LED_PER_STRIP*strip_num + (NUM_LED_PER_STRIP - DBL_RING) - 1
-                start_seg = NUM_LED_PER_STRIP*strip_num + (NUM_LED_PER_STRIP - TRPL_RING)
-            
-            
-            for i in range(start_seg, end_seg):
-                strip.setPixelColor(i, color)
-                strip.show()
-                time.sleep(wait_ms/1000.0)
+    # Turn off all LEDs
+    def clearAll(self, wait_ms=1): 
+        for i in range(self.strip.numPixels()):
+            self.strip.setPixelColor(i, Color(0,0,0))
+            self.strip.show()
+            time.sleep(wait_ms/1000.0)
 
-        # Lights up inner single segment (furthest from circumference)
-        def innerSingleSeg(self, strip, strip_num, color, wait_ms=5):
+    # Lights up number segment on outer circumference of dartboard 
+    def numSeg(self, strip_num, color, wait_ms=5):
+        # light up number segment outside of dartboard
+        if(strip_num % 2 == 0): #even num strip 
+            pixel = self.NUM_RING + self.NUM_LED_PER_STRIP*strip_num
+        else: # odd num strip 
+            pixel = self.NUM_LED_PER_STRIP*strip_num + (self.NUM_LED_PER_STRIP - 1)
             
-            if(strip_num % 2 == 0): #even num strip 
-                start_seg = NUM_LED_PER_STRIP*strip_num + TRPL_RING + 1 
-                end_seg = NUM_LED_PER_STRIP*strip_num + NUM_LED_PER_STRIP
-            else: # odd num strip
-                start_seg = NUM_LED_PER_STRIP*strip_num 
-                end_seg = NUM_LED_PER_STRIP*strip_num + (NUM_LED_PER_STRIP - TRPL_RING - 1)
-            
-            
-            for i in range(start_seg, end_seg):
-                strip.setPixelColor(i, color)
-                strip.show()
-                time.sleep(wait_ms/1000.0)
+        self.strip.setPixelColor(pixel, color)
+        self.strip.show()
+        time.sleep(wait_ms/1000.0)
+        
+    # Lights up triple segment 
+    def tripleSeg(self, strip_num, color, wait_ms=5):
+        # light up triple segment
+        if(strip_num % 2 == 0): #even num strip 
+            pixel = self.TRPL_RING + self.NUM_LED_PER_STRIP*strip_num
+        else: # odd num strip 
+            pixel = self.NUM_LED_PER_STRIP*strip_num + (self.NUM_LED_PER_STRIP - self.TRPL_RING - 1)
+        
+        self.strip.setPixelColor(pixel, color)
+        self.strip.show()
+        time.sleep(wait_ms/1000.0)
+        
+    # Lights up double segment 
+    def doubleSeg(self, strip_num, color, wait_ms=5):
+        # light up triple segment
+        if(strip_num % 2 == 0): #even num strip 
+            pixel = self.DBL_RING + self.NUM_LED_PER_STRIP*strip_num
+        else: # odd num strip 
+            pixel = self.NUM_LED_PER_STRIP*strip_num + (self.NUM_LED_PER_STRIP - self.DBL_RING - 1)
+        
+        self.strip.setPixelColor(pixel, color)
+        self.strip.show()
+        time.sleep(wait_ms/1000.0)
+
+    # Lights up outer single segment (closest to circumference)
+    def outerSingleSeg(self, strip_num, color, wait_ms=5):
+        
+        if(strip_num % 2 == 0): #even num strip 
+            start_seg = (self.DBL_RING + self.NUM_LED_PER_STRIP*strip_num) + 1
+            end_seg = self.TRPL_RING + self.NUM_LED_PER_STRIP*strip_num
+        else: # odd num strip
+            end_seg = self.NUM_LED_PER_STRIP*strip_num + (self.NUM_LED_PER_STRIP - self.DBL_RING) - 1
+            start_seg = self.NUM_LED_PER_STRIP*strip_num + (self.NUM_LED_PER_STRIP - self.TRPL_RING)
+        
+        
+        for i in range(start_seg, end_seg):
+            self.strip.setPixelColor(i, color)
+            self.strip.show()
+            time.sleep(wait_ms/1000.0)
+
+    # Lights up inner single segment (furthest from circumference)
+    def innerSingleSeg(self, strip_num, color, wait_ms=5):
+        
+        if(strip_num % 2 == 0): #even num strip 
+            start_seg = self.NUM_LED_PER_STRIP*strip_num + self.TRPL_RING + 1 
+            end_seg = self.NUM_LED_PER_STRIP*strip_num + self.NUM_LED_PER_STRIP
+        else: # odd num strip
+            start_seg = self.NUM_LED_PER_STRIP*strip_num 
+            end_seg = self.NUM_LED_PER_STRIP*strip_num + (self.NUM_LED_PER_STRIP - self.TRPL_RING - 1)
+        
+        
+        for i in range(start_seg, end_seg):
+            self.strip.setPixelColor(i, color)
+            self.strip.show()
+            time.sleep(wait_ms/1000.0)
 
                     
         
