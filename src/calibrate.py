@@ -19,7 +19,9 @@ class Calibration:
 
     def load_constants(self):
         # load yaml file with constagitnt paramters
-        with open("config/cv_constants.yaml", "r") as file:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(base_dir, "config", "cv_constants.yaml")
+        with open(config_path, "r") as file:
             constants = yaml.safe_load(file)
         return constants
 
@@ -96,11 +98,15 @@ class Calibration_App:
         self.constants = self.load_constants()
 
     def load_constants(self):
-        with open("../config/cv_constants.yaml", "r") as file:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        config_path = os.path.join(base_dir, "config", "cv_constants.yaml")
+        with open(config_path, "r") as file:
             constants = yaml.safe_load(file)
         return constants
 
     def save_perspective_matrix(self, camera_index, points):
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        matrix_path = os.path.join(base_dir, f'perspective_matrix_camera_{camera_index}.npz')
         center = (self.constants['IMAGE_WIDTH'] // 2, self.constants['IMAGE_HEIGHT'] // 2)
         drawn_points = np.float32([
             [center[0], center[1] - self.constants['DOUBLE_RING_OUTER_RADIUS_PX']],
@@ -110,4 +116,4 @@ class Calibration_App:
         ])
         live_feed_points = points
         M = cv2.getPerspectiveTransform(drawn_points, live_feed_points)
-        np.savez(f'../perspective_matrix_camera_{camera_index}.npz', matrix=M)
+        np.savez(matrix_path, matrix=M)
