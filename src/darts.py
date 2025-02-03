@@ -15,6 +15,7 @@ import sys
 import yaml
 import cv2
 from darts_cv import DartBoard_CV
+from LEDs import LEDs
 
 class DartBoard:
 
@@ -28,6 +29,9 @@ class DartBoard:
         self.success = False
         self.db_cv = DartBoard_CV(cam_R,cam_L,cam_C) #call the constructor
         #TODO: call the LED constrcutor
+        self.leds = LEDs() #call the constructor
+
+
         #TODO: maybe pass in the app constructor (intialize it in main??)
 
 
