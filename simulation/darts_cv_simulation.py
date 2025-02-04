@@ -1,7 +1,7 @@
 import time
 import random
 from flask_socketio import SocketIO
-from simple_dart_data import DartDataManager, DartThrow
+from src.simple_dart_data import DartDataManager, DartThrow
 
 class DartDetection:
 
