@@ -227,6 +227,36 @@
         .btn.cancel {
             background-color: #f44336;
         }
+        .cv-mode-active {
+            background-color: #e3f2fd;
+            border: 2px solid #1976d2;
+        }
+
+        .cv-status {
+            padding: 5px 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-weight: bold;
+        }
+
+        .cv-mode-controls {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .btn.cv-mode {
+            background-color: #1976d2;
+        }
+
+        .btn.cv-mode:hover {
+            background-color: #1565c0;
+        }
+
+        .btn.cv-mode.active {
+            background-color: #388e3c;
+        }
     </style>
 </head>
 <body>
@@ -253,6 +283,14 @@
             <div class="last-throw" id="lastThrow">Last throw: --</div>
 
             <div class="throw-controls">
+
+                <div class="cv-mode-controls">
+                    <div class="cv-status" id="cvStatus">CV Mode: Disabled</div>
+                    <button class="btn cv-mode" id="cvModeToggle" onclick="toggleCVMode()">
+                        Enable CV Mode
+                    </button>
+                </div>
+
                 <button class="btn" id="throwButton" onclick="simulateThrow()">Simulate Throw</button>
                 
                 <div class="manual-throw-control">
@@ -336,6 +374,7 @@
         let currentThrow = 1;
         let isMyTurn = false;
         let lastThrowData = null; // Store information about the last throw
+        let cvModeActive = false;
         
         socket.on('connect', () => {
             console.log('Connected to server');
@@ -472,6 +511,20 @@
                 `game-status ${data.game_over ? 'finished' : 'active'}`;
             document.getElementById('gameStatus').textContent = 
                 data.game_over ? `Game Over! Winner: ${data.winner}` : 'Game in progress';
+
+            const throwButton = document.getElementById('throwButton');
+            const manualControls = document.querySelector('.manual-throw-control'); 
+            
+            // Disable manual controls if CV mode is active
+            if (cvModeActive) {
+                throwButton.disabled = true;
+                manualControls.style.opacity = '0.5';
+                manualControls.style.pointerEvents = 'none';
+            } else {
+                throwButton.disabled = !isMyTurn;
+                manualControls.style.opacity = '1';
+                manualControls.style.pointerEvents = 'auto';
+            }
         });
 
         function showOverrideModal() {
@@ -586,6 +639,9 @@
         
         function leaveGame() {
             if (confirm('Are you sure you want to leave the game?')) {
+                if (cvModeActive) {
+                   socket.emit('toggle_cv_mode', { enable: false });
+                }                
                 socket.emit('end_game');
                 window.location.href = '/rooms';
             }
@@ -616,6 +672,50 @@
                 hideOverrideModal();
             }
         }
+
+        function toggleCVMode() {
+            const newState = !cvModeActive;
+            socket.emit('toggle_cv_mode', { enable: newState });
+        }
+
+        socket.on('cv_mode_status', (data) => {
+            cvModeActive = data.status === "enabled";
+            const cvStatusDiv = document.getElementById('cvStatus');
+            const cvToggleBtn = document.getElementById('cvModeToggle');
+            const throwButton = document.getElementById('throwButton');
+            const manualControls = document.querySelector('.manual-throw-control');
+            
+            // Update CV status display
+            cvStatusDiv.textContent = `CV Mode: ${cvModeActive ? 'Enabled' : 'Disabled'}`;
+            
+            // Update toggle button
+            cvToggleBtn.textContent = cvModeActive ? 'Disable CV Mode' : 'Enable CV Mode';
+            cvToggleBtn.classList.toggle('active', cvModeActive);
+            
+            // Disable/Enable manual controls when CV mode is active/inactive
+            throwButton.disabled = cvModeActive;
+            manualControls.style.opacity = cvModeActive ? '0.5' : '1';
+            manualControls.style.pointerEvents = cvModeActive ? 'none' : 'auto';
+        });
+
+        socket.on('cv_dart_detected', (data) => {
+            console.log('CV dart detected:', data);
+            // The throw will be processed automatically by the server
+            // Just update the UI to show the detected throw
+            document.getElementById('lastThrow').textContent = 
+                `CV Detected: ${data.score} (${data.multiplier}x${data.score/data.multiplier})`;
+        });
+
+        socket.on('cvinit_status', (data) => {
+            console.log('CV initialization status:', data);
+            if (data.cvInit === 'Done Init') {
+                console.log('CV system initialized');
+            }
+        });
+
+
+
+
     </script>
 </body>
 </html>
