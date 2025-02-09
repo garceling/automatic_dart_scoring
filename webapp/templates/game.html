@@ -675,15 +675,18 @@
 
         function toggleCVMode() {
             const newState = !cvModeActive;
+            console.log(`Attempting to ${newState ? 'enable' : 'disable'} CV mode`);  // Debug log
             socket.emit('toggle_cv_mode', { enable: newState });
         }
 
         socket.on('cv_mode_status', (data) => {
+            console.log('Received CV mode status:', data);  // Debug log
             cvModeActive = data.status === "enabled";
             const cvStatusDiv = document.getElementById('cvStatus');
             const cvToggleBtn = document.getElementById('cvModeToggle');
             const throwButton = document.getElementById('throwButton');
             const manualControls = document.querySelector('.manual-throw-control');
+            console.log('Setting CV mode active:', cvModeActive);  // Debug log
             
             // Update CV status display
             cvStatusDiv.textContent = `CV Mode: ${cvModeActive ? 'Enabled' : 'Disabled'}`;
@@ -696,10 +699,12 @@
             throwButton.disabled = cvModeActive;
             manualControls.style.opacity = cvModeActive ? '0.5' : '1';
             manualControls.style.pointerEvents = cvModeActive ? 'none' : 'auto';
+
+            console.log('UI updated for CV mode:', cvModeActive);  // Debug log
         });
 
         socket.on('cv_dart_detected', (data) => {
-            console.log('CV dart detected:', data);
+            console.log('CV dart detected:', data); // Debug log
             // The throw will be processed automatically by the server
             // Just update the UI to show the detected throw
             document.getElementById('lastThrow').textContent = 

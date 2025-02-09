@@ -448,23 +448,30 @@ def handle_connect():
 @socketio.on('toggle_cv_mode')
 def handle_toggle_cv_mode(data):
     """Handle toggling CV mode on/off"""
+    print(f"Recieved toggle_cv_mode event with data: {data}") #debug print
     if 'user_id' not in session:
+        print("Error: User not authenticated") #debug print
         emit('error', {'message': 'Not authenticated'})
         return
 
     try:
         enable = data.get('enable', False)
-        
+        print(f"Attempting to {'enable' if enable else 'disable'} CV mode")  # Debug print
+
         if enable:
             # Initialize CV if we're enabling it
+            print("Initializing CV system...")  # Debug print
             dart_detection.initialize()
             dart_detection.toggle_cv_mode(True)
             dart_detection.start()
+            print("CV system initialized and started")  # Debug print
             emit('cv_status', {'status': 'CV mode enabled'})
         else:
             # Stop CV detection if we're disabling it
+            print("Stopping CV system...")  # Debug print
             dart_detection.toggle_cv_mode(False)
             dart_detection.stop()
+            print("CV system stopped")  # Debug print
             emit('cv_status', {'status': 'CV mode disabled'})
             
     except Exception as e:
@@ -474,11 +481,16 @@ def handle_toggle_cv_mode(data):
 @socketio.on('cv_dart_detected')
 def handle_cv_dart(data):
     """Process dart throws detected by CV"""
+    print(f"Received CV dart detection: {data}")  # Debug print
+
     if 'user_id' not in session:
+        print("Error: User not authenticated")  # Debug print
         return
         
     try:
         current_throw = dart_detection.get_current_throw()
+        print(f"Current throw from CV: {current_throw}")  # Debug print
+
         if current_throw:
             # Create data structure expected by handle_throw_dart
             throw_data = {
@@ -488,6 +500,7 @@ def handle_cv_dart(data):
                 'cv_detected': True  # Flag to indicate this came from CV
             }
             
+             print(f"Processing CV throw: {throw_data}")  # Debug print
             # Process the throw using existing game logic
             handle_throw_dart(throw_data)
             
