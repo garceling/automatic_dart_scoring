@@ -500,7 +500,7 @@ def handle_cv_dart(data):
                 'cv_detected': True  # Flag to indicate this came from CV
             }
             
-             print(f"Processing CV throw: {throw_data}")  # Debug print
+            print(f"Processing CV throw: {throw_data}")  # Debug print
             # Process the throw using existing game logic
             handle_throw_dart(throw_data)
             

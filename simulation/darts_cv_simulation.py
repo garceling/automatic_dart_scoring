@@ -62,7 +62,7 @@ class DartDetection:
                 score, multiplier, position = self.generate_random_score()
                 print(f"DartDetection: Generated throw - score: {score}, multiplier: {multiplier}, position: {position}")  # Debug print
                 self.data_manager.record_throw(position = position, score = score, multiplier = multiplier)
-                self.socketio.emit('dart_detected', {'score': score, 'multiplier': multiplier, 'position': position})
+                self.socketio.emit('cv_dart_detected', {'score': score, 'multiplier': multiplier, 'position': position})
 
 
     def start(self):
