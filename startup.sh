@@ -1,6 +1,6 @@
 #!/bin/bash
 
-VENV_PATH="/home/grace/Desktop/automatic_dart_scoring/venv"
+VENV_PATH="/home/lawrence/Desktop/Grace_Github_pi/g_cap_venv"
 
 if [ -d "$VENV_PATH" ]; then
     source "$VENV_PATH/bin/activate"
