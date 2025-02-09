@@ -11,6 +11,7 @@ class DartDetection:
         self.socketio = socketio
         self.data_manager = DartDataManager() #Initializes DartDataManager, the data structure used to interface the cv with the web app
         self.cameras = None
+        self.current_user_id = None #used to pass user ID so app will update properly
 
     def generate_random_score(self):
 
@@ -62,7 +63,7 @@ class DartDetection:
                 score, multiplier, position = self.generate_random_score()
                 print(f"DartDetection: Generated throw - score: {score}, multiplier: {multiplier}, position: {position}")  # Debug print
                 self.data_manager.record_throw(position = position, score = score, multiplier = multiplier)
-                self.socketio.emit('cv_dart_detected', {'score': score, 'multiplier': multiplier, 'position': position})
+                self.socketio.emit('cv_dart_detected', {'score': score, 'multiplier': multiplier, 'position': position, 'user_id': self.current_user_id})
 
 
     def start(self):
@@ -73,10 +74,11 @@ class DartDetection:
     def stop(self):
         self.cv_running = False #stop the dart deteciton
 
-    def toggle_cv_mode(self, enable: bool):
+    def toggle_cv_mode(self, enable: bool, user_id: str = None):
         """Toggle CV mode on/off"""
         print(f"DartDetection: Toggling CV mode to {'enabled' if enable else 'disabled'}")  # Debug print
         self.cv_mode = enable
+        self.current_user_id = user_id
         mode_status = "enabled" if enable else "disabled"
         print(f"DartDetection: Emitting cv_mode_status: {mode_status}")  # Debug print
         self.socketio.emit('cv_mode_status', {'status': mode_status})

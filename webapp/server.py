@@ -456,7 +456,8 @@ def handle_toggle_cv_mode(data):
 
     try:
         enable = data.get('enable', False)
-        print(f"Attempting to {'enable' if enable else 'disable'} CV mode")  # Debug print
+        user_id = session['user_id'] # used to pass user id into cv sim so emits work properly
+        print(f"Attempting to {'enable' if enable else 'disable'} CV mode for user {user_id}")  # Debug print
 
         if enable:
             # Initialize CV if we're enabling it
@@ -482,31 +483,33 @@ def handle_toggle_cv_mode(data):
 def handle_cv_dart(data):
     """Process dart throws detected by CV"""
     print(f"Received CV dart detection: {data}")  # Debug print
+    user_id = data.get('user_id') #get user ID from CV data
 
-    if 'user_id' not in session:
+    if not user_id:
         print("Error: User not authenticated")  # Debug print
         return
-        
-    try:
-        current_throw = dart_detection.get_current_throw()
-        print(f"Current throw from CV: {current_throw}")  # Debug print
 
-        if current_throw:
-            # Create data structure expected by handle_throw_dart
-            throw_data = {
-                'score': current_throw.score,
-                'multiplier': current_throw.multiplier,
-                'position': current_throw.position,
-                'cv_detected': True  # Flag to indicate this came from CV
-            }
-            
-            print(f"Processing CV throw: {throw_data}")  # Debug print
-            # Process the throw using existing game logic
-            handle_throw_dart(throw_data)
-            
-    except Exception as e:
-        print(f"Error processing CV dart: {e}")
-        emit('error', {'message': 'Failed to process CV dart throw'})
+    with app.test_request_context():    
+        try:
+            current_throw = dart_detection.get_current_throw()
+            print(f"Current throw from CV: {current_throw}")  # Debug print
+
+            if current_throw:
+                # Create data structure expected by handle_throw_dart
+                throw_data = {
+                    'score': current_throw.score,
+                    'multiplier': current_throw.multiplier,
+                    'position': current_throw.position,
+                    'cv_detected': True  # Flag to indicate this came from CV
+                }
+                
+                print(f"Processing CV throw: {throw_data}")  # Debug print
+                # Process the throw using existing game logic
+                handle_throw_dart(throw_data)
+                
+        except Exception as e:
+            print(f"Error processing CV dart: {e}")
+            emit('error', {'message': 'Failed to process CV dart throw'})
 
 
 
