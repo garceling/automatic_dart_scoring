@@ -706,6 +706,17 @@
         socket.on('cv_dart_detected', (data) => {
             console.log('CV dart detected:', data); // Debug log
             // The throw will be processed automatically by the server
+
+            // Emit the throw_dart event to process the CV throw with the current session
+            socket.emit('throw_dart', {
+                cv_detected: true,
+                score: data.score,
+                multiplier: data.multiplier
+            });
+
+
+
+
             // Just update the UI to show the detected throw
             document.getElementById('lastThrow').textContent = 
                 `CV Detected: ${data.score} (${data.multiplier}x${data.score/data.multiplier})`;
