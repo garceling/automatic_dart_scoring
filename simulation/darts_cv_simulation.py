@@ -57,7 +57,7 @@ class DartDetection:
         print("DartDetection: CV loop started")  # Debug print
 
         while self.cv_running:
-            if self.cv_mode:
+            if self.cv_mode and self.current_user_id:
                 print("DartDetection: Generating throw in CV loop")  # Debug print
                 time.sleep(5)  # Simulate deteciton time
                 score, multiplier, position = self.generate_random_score()
@@ -78,7 +78,7 @@ class DartDetection:
         """Toggle CV mode on/off"""
         print(f"DartDetection: Toggling CV mode to {'enabled' if enable else 'disabled'}")  # Debug print
         self.cv_mode = enable
-        self.current_user_id = user_id
+        self.current_user_id = user_id #store the user id
         mode_status = "enabled" if enable else "disabled"
         print(f"DartDetection: Emitting cv_mode_status: {mode_status}")  # Debug print
         self.socketio.emit('cv_mode_status', {'status': mode_status})
