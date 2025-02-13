@@ -28,6 +28,7 @@ class DartBoard_CV:
         self.cam_L = cam_L
         self.cam_C = cam_C
         self.constants = self.load_constants()
+        self.camera_scores = [None, None, None]
         #self.camera_scores = [None] * self.constants['NUM_CAMERAS']  # Initialize camera_scores list
         self.majority_score = None
         self.dart_coordinates = None
@@ -96,7 +97,7 @@ class DartBoard_CV:
         limit as that could be caused by too much noise/movement
         '''
         self.thresh_R = get_threshold(self.cam_R, self.t_R)
-        self.thresh_L = get_treshold(self.cam_L, self.t_L)
+        self.thresh_L = get_threshold(self.cam_L, self.t_L)
         self.thresh_C = get_threshold(self.cam_C, self.t_C)
 
         non_zero_R = cv2.countNonZero(self.thresh_R)
@@ -140,11 +141,11 @@ class DartBoard_CV:
 
     def dart_detection(self):
         #applies frame subtraction
-        t_plus_R, self.blur_R = diff2blur(cam_R, t_R)
-        t_plus_L, self.blur_L = diff2blur(cam_L, t_L)
-        t_plus_C, self.blur_C = diff2blur(cam_C, t_C)
+        t_plus_R, self.blur_R = diff2blur(self.cam_R, self.t_R)
+        t_plus_L, self.blur_L = diff2blur(self.cam_L, self.t_L)
+        t_plus_C, self.blur_C = diff2blur(self.cam_C, self.t_C)
 
-        found_corner_detection, corners_R, corners_L, corners_C = self.corner_detection(blur_R, blur_L, blur_C)
+        found_corner_detection, corners_R, corners_L, corners_C = self.corner_detection(self.blur_R, self.blur_L, self.blur_C)
         if not found_corner_detection:
             return False
 
@@ -153,17 +154,17 @@ class DartBoard_CV:
         if not found_filter_corner_detection:
             return False
 
-        rows, cols = blur_R.shape[:2]
+        rows, cols = self.blur_R.shape[:2]
         self.corners_final_R = filterCornersLine(corners_f_R, rows, cols)
-        rows, cols = blur_L.shape[:2]
+        rows, cols = self.blur_L.shape[:2]
         self.corners_final_L = filterCornersLine(corners_f_L, rows, cols)
-        rows, cols = blur_C.shape[:2]
+        rows, cols = self.blur_C.shape[:2]
         self.corners_final_C = filterCornersLine(corners_f_C, rows, cols)
 
         #final dart detection
-        _,self.thresh_R = cv2.threshold(blur_R, 60, 255, 0)
-        _, self.thresh_L = cv2.threshold(blur_L, 60, 255, 0)
-        _, self.thresh_C = cv2.threshold(blur_C, 60, 255, 0)
+        _,self.thresh_R = cv2.threshold(self.blur_R, 60, 255, 0)
+        _, self.thresh_L = cv2.threshold(self.blur_L, 60, 255, 0)
+        _, self.thresh_C = cv2.threshold(self.blur_C, 60, 255, 0)
 
         if cv2.countNonZero(self.thresh_R) > 15000 or cv2.countNonZero(self.thresh_L) > 15000 or cv2.countNonZero(self.thresh_C) > 15000:
             return False
@@ -173,23 +174,23 @@ class DartBoard_CV:
     
     def getRealLocation(self, mount):
         if mount == "right":
-            loc = np.argmax(corners_final, axis=0)
             blur = self.blur_R
             prev_tip_point = self.prev_tip_point_R
             kalman_filter = self.kalman_filter_R
             corners_final = self.corners_final_R
+            loc = np.argmax(corners_final, axis=0)
         elif mount == "center":
-            loc = np.argmin(corners_final, axis=0)
             blur = self.blur_C
             prev_tip_point = self.prev_tip_point_C
             kalman_filter = self.kalman_filter_C    
             corners_final = self.corners_final_C
-        elif mount == "left":
             loc = np.argmin(corners_final, axis=0)
+        elif mount == "left":
             blur = self.blur_L
             prev_tip_point = self.prev_tip_point_L
             kalman_filter = self.kalman_filter_L 
             corners_final = self.corners_final_L
+            loc = np.argmin(corners_final, axis=0)
 
         locationofdart = corners_final[loc]
         
@@ -198,7 +199,7 @@ class DartBoard_CV:
         skeleton = cv2.ximgproc.thinning(cv2.drawContours(np.zeros_like(blur), [dart_contour], -1, 255, thickness=cv2.FILLED))
         
         # Detect the dart tip using skeletonization and Kalman filter
-        dart_tip = find_dart_tip(skeleton, prev_tip_point, mount)
+        dart_tip = self.find_dart_tip(skeleton, prev_tip_point, mount)
         
         if dart_tip is not None:
             tip_x, tip_y = dart_tip
@@ -210,7 +211,7 @@ class DartBoard_CV:
         
         return locationofdart, dart_tip
 
-    def find_dart_tip(skeleton, prev_tip_point, mount):
+    def find_dart_tip(self,skeleton, prev_tip_point, mount):
 
 
         # Find the contour of the skeleton
@@ -279,9 +280,9 @@ class DartBoard_CV:
         locationofdart_L, self.prev_tip_point_L = self.getRealLocation("left")
         locationofdart_C, self.prev_tip_point_C = self.getRealLocation("center")
 
-        self.get_score(locationofdart_R, locationofdart_L, locationofdart_C)
+        self.camera_scores = get_score(locationofdart_R, locationofdart_L, locationofdart_C)
 
-        self.majority_score = calculate_majority_score()
+        self.majority_score = self.calculate_majority_score()
         
         if self.majority_score is not None:
             majority_camera_index = self.camera_scores.index(self.majority_score)

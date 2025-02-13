@@ -10,6 +10,7 @@ from game_501 import update_score, check_game_over
 
 # Constants
 NUM_CAMERAS = 3
+CAMERA_INDEXS = [0,2,4]
 IMAGE_WIDTH = 640
 IMAGE_HEIGHT = 480
 DARTBOARD_DIAMETER_MM = 451
@@ -157,7 +158,7 @@ def click_event(event, x, y, flags, param):
             
 def load_perspective_matrices():
     perspective_matrices = []
-    for camera_index in range(NUM_CAMERAS):
+    for camera_index in CAMERA_INDEXS:
         try:
             data = np.load(f'perspective_matrix_camera_{camera_index}.npz')
             matrix = data['matrix']
@@ -351,7 +352,7 @@ class DartboardGUI:
             [center[0] - DOUBLE_RING_OUTER_RADIUS_PX, center[1]],
         ])
         
-        for camera_index in range(NUM_CAMERAS):
+        for camera_index in CAMERA_INDEXS:
             live_feed_points = calibrate_camera(camera_index)
             if live_feed_points is not None:
                 M = cv2.getPerspectiveTransform(drawn_points, live_feed_points)
@@ -418,8 +419,8 @@ def main(mode="standard"):
     perspective_matrices = load_perspective_matrices()
 
     cam_R = cv2.VideoCapture(0)  # Use the appropriate camera index for the right camera
-    cam_L = cv2.VideoCapture(1)  # Use the appropriate camera index for the left camera
-    cam_C = cv2.VideoCapture(2)  # Use the appropriate camera index for the center camera
+    cam_L = cv2.VideoCapture(2)  # Use the appropriate camera index for the left camera
+    cam_C = cv2.VideoCapture(4)  # Use the appropriate camera index for the center camera
 
     # Check if the cameras are opened successfully
     if not cam_R.isOpened() or not cam_L.isOpened() or not cam_C.isOpened():

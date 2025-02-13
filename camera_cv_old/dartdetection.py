@@ -159,12 +159,12 @@ def find_dart_tip(skeleton, prev_tip_point, kalman_filter):
 
 def main():
     cam_R = cv2.VideoCapture(0)  # Use the appropriate camera index for the right camera
-    cam_L = cv2.VideoCapture(1)  # Use the appropriate camera index for the left camera
-    cam_C = cv2.VideoCapture(2)  # Use the appropriate camera index for the center camera
+    cam_L = cv2.VideoCapture(2)  # Use the appropriate camera index for the left camera
+    cam_C = cv2.VideoCapture(4)  # Use the appropriate camera index for the center camera
 
     # Check if the cameras are opened successfully
     if not cam_R.isOpened() or not cam_L.isOpened() or not cam_C.isOpened():
-        print("Failed to open one or more cameras.")
+        print("Failed to open one or more cameras hi.")
         return
 
     # Read first image twice to start loop

@@ -4,8 +4,10 @@ import cv2
 import yaml
 from kalman_filter import KalmanFilter
 import numpy as np
+import math
 global constants
 global perspective_matrices
+
 
 with open("config/cv_constants.yaml", "r") as file:
     constants = yaml.safe_load(file)
@@ -21,6 +23,8 @@ def load_perspective_matrices():
             print(f"Perspective matrix file not found for camera {camera_index}. Please calibrate the cameras first.")
             exit(1)
     return perspective_matrices
+
+perspective_matrices = load_perspective_matrices()
 
 def generate_kalman_filters():
     kalman_filter_R = KalmanFilter(constants['DT'], constants['U_X'], constants['U_Y'], constants['STD_ACC'], constants['X_STD_MEAS'], constants['Y_STD_MEAS'])
@@ -181,3 +185,5 @@ def draw_dartboard():
 
     for angle in sector_intersections.values():
         draw_point_at_angle(dartboard_image, constants['center'], angle, constants['DOUBLE_RING_OUTER_RADIUS_PX'], (255, 0, 0), 5)
+
+    return dartboard_image
