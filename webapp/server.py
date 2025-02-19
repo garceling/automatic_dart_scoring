@@ -463,14 +463,14 @@ def handle_toggle_cv_mode(data):
             # Initialize CV if we're enabling it
             print("Initializing CV system...")  # Debug print
             dart_detection.initialize()
-            dart_detection.toggle_cv_mode(True,user_id)
+            dart_detection.toggle_cv_mode(True)
             dart_detection.start()
             print("CV system initialized and started")  # Debug print
             emit('cv_status', {'status': 'CV mode enabled'})
         else:
             # Stop CV detection if we're disabling it
             print("Stopping CV system...")  # Debug print
-            dart_detection.toggle_cv_mode(False,user_id)
+            dart_detection.toggle_cv_mode(False)
             dart_detection.stop()
             print("CV system stopped")  # Debug print
             emit('cv_status', {'status': 'CV mode disabled'})
@@ -500,9 +500,7 @@ def handle_cv_dart(data):
                     'score': current_throw.score,
                     'multiplier': current_throw.multiplier,
                     'position': current_throw.position,
-                    'cv_detected': True,  # Flag to indicate this came from CV
-                    'user_id': user_id #i dont know about this line
-
+                    'cv_detected': True  # Flag to indicate this came from CV
                 }
                 
                 print(f"Processing CV throw: {throw_data}")  # Debug print
