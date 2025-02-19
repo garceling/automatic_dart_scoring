@@ -7,8 +7,7 @@ import random
 from datetime import datetime
 import time
 from contextlib import contextmanager
-from simulation.darts_cv_simulation import DartDetection
-from src.simple_dart_data import DartDataManager, DartThrow
+from darts_cv_simulation import DartDetection
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
