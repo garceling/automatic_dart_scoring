@@ -1,6 +1,6 @@
 from flask import Flask, render_template
 from flask_socketio import SocketIO
-from og_darts_cv_simulation import *
+from darts_cv_simulation import *
 
 app = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*")
