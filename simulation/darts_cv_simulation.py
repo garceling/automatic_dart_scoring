@@ -1,33 +1,35 @@
 import time
 import random
 from flask_socketio import SocketIO
-from simple_dart_data import DartDataManager, DartThrow
 
 class DartDetection:
 
     def __init__(self, socketio: SocketIO):
         self.cv_running = False
-        self.cv_mode = False #Flag so web app knows when to use cv simulated data
         self.socketio = socketio
-        self.data_manager = DartDataManager() #Initializes DartDataManager, the data structure used to interface the cv with the web app
         self.cameras = None
 
     def generate_random_score(self):
 
-        multiplier = 1
-        position = (0,0) #Fixed position for cv sim testing purposes, real cv will record actual dart position and send it to the web app, so it can be displayed on a little dart display beside the score
+        is_double = False
+        is_triple = False
 
         dartboard_numbers = list(range(1, 21)) + [25] #25 is bullseye
+
         single_score = random.choice(dartboard_numbers)
 
         if single_score == 25: #no triple for bullseye
-            multiplier = random.choice([1, 2]) 
-            return (single_score, multiplier, position)
+            is_double = random.choice([True, False]) 
+            return (single_score, is_double, False)
      
-        multiplier = random.choices([1, 2, 3], weights=[60, 20, 20])[0]
+        multiplier = random.choices(["single", "double", "triple"], weights=[60, 20, 20])[0]
     
+        if multiplier == "double":
+            is_double = True
+        elif multiplier == "triple":
+            is_triple = True
 
-        return (single_score, multiplier, position)
+        return (single_score, is_double, is_triple)
 
     def initialize(self):
         """
@@ -47,7 +49,7 @@ class DartDetection:
         """
         continuously detects darts and sends scores while running.
 
-        data in the form: (single_score, multiplier, position)
+        data in the form: (single_score, is_double, is_triple)
 
         TODO: return data in the form of x,y coordinates, the app will have a picture of the dartboard
         and plot + calculte the score
@@ -56,9 +58,8 @@ class DartDetection:
 
         while self.cv_running:
             time.sleep(5)  # Simulate deteciton time
-            score, multiplier, position = self.generate_random_score()
-            self.data_manager.record_throw(position = position, score = score, multiplier = multiplier)
-            self.socketio.emit('dart_detected', {'score': score, 'multiplier': multiplier, 'position': position})
+            score, is_double, is_triple = self.generate_random_score()
+            self.socketio.emit('dart_detected', {'score': score, 'is_double': is_double, 'is_triple': is_triple})
 
 
     def start(self):
@@ -68,13 +69,4 @@ class DartDetection:
 
     def stop(self):
         self.cv_running = False #stop the dart deteciton
-
-    def toggle_cv_mode(self, enable: bool):
-        """Toggle CV mode on/off"""
-        self.cv_mode = enable
-        mode_status = "enabled" if enable else "disabled"
-        self.socketio.emit('cv_mode_status', {'status': mode_status})
-        
-    def get_current_throw(self):
-        """Get the most recent throw from the data manager"""
-        return self.data_manager.get_current_throw()
+   
