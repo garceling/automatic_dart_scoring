@@ -53,16 +53,12 @@ class DartDetection:
         and plot + calculte the score
 
         """
-        print("DartDetection: CV loop started")  # Debug print
 
         while self.cv_running:
-            if self.cv_mode:
-                print("DartDetection: Generating throw in CV loop")  # Debug print
-                time.sleep(5)  # Simulate deteciton time
-                score, multiplier, position = self.generate_random_score()
-                print(f"DartDetection: Generated throw - score: {score}, multiplier: {multiplier}, position: {position}")  # Debug print
-                self.data_manager.record_throw(position = position, score = score, multiplier = multiplier)
-                self.socketio.emit('dart_detected', {'score': score, 'multiplier': multiplier, 'position': position})
+            time.sleep(5)  # Simulate deteciton time
+            score, multiplier, position = self.generate_random_score()
+            self.data_manager.record_throw(position = position, score = score, multiplier = multiplier)
+            self.socketio.emit('dart_detected', {'score': score, 'multiplier': multiplier, 'position': position})
 
 
     def start(self):
@@ -75,10 +71,8 @@ class DartDetection:
 
     def toggle_cv_mode(self, enable: bool):
         """Toggle CV mode on/off"""
-        print(f"DartDetection: Toggling CV mode to {'enabled' if enable else 'disabled'}")  # Debug print
         self.cv_mode = enable
         mode_status = "enabled" if enable else "disabled"
-        print(f"DartDetection: Emitting cv_mode_status: {mode_status}")  # Debug print
         self.socketio.emit('cv_mode_status', {'status': mode_status})
         
     def get_current_throw(self):
