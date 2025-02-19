@@ -7,7 +7,6 @@ import random
 from datetime import datetime
 import time
 from contextlib import contextmanager
-from darts_cv_simulation import DartDetection
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -17,8 +16,6 @@ app.config['SECRET_KEY'] = 'banana'  # Replace with a secure key
 
 # Socket.IO event handlers
 socketio = SocketIO(app, cors_allowed_origins="*")
-dart_detection = DartDetection(socketio)
-
 
 app.register_blueprint(calibration_bp)
 
@@ -442,60 +439,6 @@ def handle_connect():
     print("Client connected:", request.sid)
     if 'username' in session:
         print(f"User {session['username']} connected")
-
-
-@socketio.on('toggle_cv_mode')
-def handle_toggle_cv_mode(data):
-    """Handle toggling CV mode on/off"""
-    if 'user_id' not in session:
-        emit('error', {'message': 'Not authenticated'})
-        return
-
-    try:
-        enable = data.get('enable', False)
-        
-        if enable:
-            # Initialize CV if we're enabling it
-            dart_detection.initialize()
-            dart_detection.toggle_cv_mode(True)
-            dart_detection.start()
-            emit('cv_status', {'status': 'CV mode enabled'})
-        else:
-            # Stop CV detection if we're disabling it
-            dart_detection.toggle_cv_mode(False)
-            dart_detection.stop()
-            emit('cv_status', {'status': 'CV mode disabled'})
-            
-    except Exception as e:
-        print(f"Error toggling CV mode: {e}")
-        emit('error', {'message': 'Failed to toggle CV mode'})
-
-@socketio.on('cv_dart_detected')
-def handle_cv_dart(data):
-    """Process dart throws detected by CV"""
-    if 'user_id' not in session:
-        return
-        
-    try:
-        current_throw = dart_detection.get_current_throw()
-        if current_throw:
-            # Create data structure expected by handle_throw_dart
-            throw_data = {
-                'score': current_throw.score,
-                'multiplier': current_throw.multiplier,
-                'position': current_throw.position,
-                'cv_detected': True  # Flag to indicate this came from CV
-            }
-            
-            # Process the throw using existing game logic
-            handle_throw_dart(throw_data)
-            
-    except Exception as e:
-        print(f"Error processing CV dart: {e}")
-        emit('error', {'message': 'Failed to process CV dart throw'})
-
-
-
 
 @socketio.on('get_rooms')
 def handle_get_rooms():
@@ -963,8 +906,8 @@ def handle_throw_dart(data=None):
                 emit('error', {'message': 'No active game found'})
                 return
 
-            # Verify it's this player's turn (skip check if it's a CV-detected throw)
-            if not data.get('cv_detected') and game_state['current_player_position'] != game_state['current_position']:
+            # Verify it's this player's turn
+            if game_state['current_player_position'] != game_state['current_position']:
                 emit('error', {'message': 'Not your turn'})
                 return
             
@@ -988,13 +931,6 @@ def handle_throw_dart(data=None):
                 else:
                     score = base_score * multiplier
                     bull_flag = False
-
-            elif data and data.get('cv_detected'):
-                # CV detected throw
-                score = data.get('score', 0)
-                multiplier = data.get('multiplier', 1)
-                bull_flag = (score == 25 or score == 50)
-
             else:
                 # Use existing simulation
                 score, multiplier, bull_flag = simulate_dart_throw()
