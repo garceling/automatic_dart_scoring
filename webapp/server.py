@@ -83,7 +83,7 @@ def cv_polling_loop():
         except Exception as e:
             print(f"Error in CV polling loop: {e}")
             
-        time.sleep(0.1)  # Poll every 100ms
+        time.sleep(0.5)  # Poll every 500ms
 
 
 # Hashing passwords securely
