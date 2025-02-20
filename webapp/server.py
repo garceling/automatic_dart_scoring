@@ -30,12 +30,12 @@ cv_polling_thread = None
 cv_polling_active = False
 
 @contextmanager
-def get_db_connection_with_retry(max_attempts=5):
+def get_db_connection_with_retry(max_attempts=5, db_path='dartboard.db'):
     conn = None
     attempts = 0
     while attempts < max_attempts:
         try:
-            conn = sqlite3.connect('dartboard.db', timeout=20)
+            conn = sqlite3.connect(db_path, timeout=20)
             conn.row_factory = sqlite3.Row
             yield conn
             conn.close()
