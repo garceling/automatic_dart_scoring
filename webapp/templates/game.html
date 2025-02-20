@@ -388,7 +388,7 @@
             cvModeEnabled = !cvModeEnabled;
             console.log('Emitting toggle_cv_mode event:', cvModeEnabled); // Debug: Socket emit
 
-            socket.emit('toggle_cv_mode', { enabled: !cvModeEnabled });
+            socket.emit('toggle_cv_mode', { enabled: cvModeEnabled });
         }
 
         function updateCVModeUI(enabled, toggledBy) {
