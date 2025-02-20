@@ -9,6 +9,9 @@ import time
 from contextlib import contextmanager
 import threading
 import time
+import os
+
+CV_DB_PATH = os.path.join('/home/lawrence/Desktop/Grace_Github_pi/automatic_dart_scoring/simulation', 'cv_data.db') #path is for lawrence's pi
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -292,7 +295,7 @@ def get_current_game_id():
 def get_latest_cv_throw_id():
     """Helper function to get the latest throw ID from CV database"""
     try:
-        with sqlite3.connect('cv_data.db') as cv_conn:
+        with sqlite3.connect(CV_DB_PATH) as cv_conn:
             cv_conn.row_factory = sqlite3.Row
             cursor = cv_conn.cursor()
             cursor.execute('SELECT MAX(id) as max_id FROM throws')
@@ -305,7 +308,7 @@ def get_latest_cv_throw_id():
 def check_cv_throws(game_id, last_id):
     """Helper function to check for new CV throws"""
     try:
-        with sqlite3.connect('cv_data.db') as cv_conn:
+        with sqlite3.connect(CV_DB_PATH) as cv_conn:
             cv_conn.row_factory = sqlite3.Row
             cursor = cv_conn.cursor()
             
