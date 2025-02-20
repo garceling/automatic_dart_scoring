@@ -7,6 +7,11 @@ import random
 from datetime import datetime
 import time
 from contextlib import contextmanager
+import threading
+import time
+import os
+
+CV_DB_PATH = os.path.join('/home/lawrence/Desktop/Grace_Github_pi/automatic_dart_scoring/simulation', 'cv_data.db') #path is for lawrence's pi
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -22,13 +27,18 @@ app.register_blueprint(calibration_bp)
 # pass in the websocket for the calibartion
 register_socketio_events(socketio)
 
+
+cv_active_games = {}  # Dict to track CV mode status for games {game_id: last_processed_id}
+cv_polling_thread = None
+cv_polling_active = False
+
 @contextmanager
-def get_db_connection_with_retry(max_attempts=5):
+def get_db_connection_with_retry(max_attempts=5, db_path='dartboard.db'):
     conn = None
     attempts = 0
     while attempts < max_attempts:
         try:
-            conn = sqlite3.connect('dartboard.db', timeout=20)
+            conn = sqlite3.connect(db_path, timeout=20)
             conn.row_factory = sqlite3.Row
             yield conn
             conn.close()
@@ -42,6 +52,39 @@ def get_db_connection_with_retry(max_attempts=5):
             time.sleep(0.5)
             if conn:
                 conn.close()
+
+
+def cv_polling_loop():
+    """Background thread to poll CV database for new throws"""
+    print("CV polling loop started") # Debug: Loop start
+    global cv_polling_active
+    
+    while cv_polling_active:
+        try:
+            # Only poll if there are games using CV mode
+            if cv_active_games:
+                print(f"Checking throws for {len(cv_active_games)} active games") # Debug: Active games
+                for game_id, last_id in list(cv_active_games.items()):  # Use list to avoid runtime modification issues
+                    new_throws = check_cv_throws(game_id, last_id)
+                    
+                    if new_throws:
+                        print(f"Found {len(new_throws)} new throws for game {game_id}") # Debug: New throws
+                        # Update game's last processed ID
+                        cv_active_games[game_id] = new_throws[-1]['id']
+                        
+                        # Send each throw to all players in the game
+                        for throw in new_throws:
+                            print(f"Sending throw to game {game_id}: score={throw['score']}, multiplier={throw['multiplier']}") # Debug: Throw emit
+                            socketio.emit('cv_throw_detected', {
+                                'score': throw['score'],
+                                'multiplier': throw['multiplier']
+                            }, room=f"game_{game_id}")
+                
+        except Exception as e:
+            print(f"Error in CV polling loop: {e}")
+            
+        time.sleep(0.5)  # Poll every 500ms
+
 
 # Hashing passwords securely
 def hash_password(password):
@@ -232,6 +275,63 @@ def update_lobby_state(room_id):
     except sqlite3.Error as e:
         print(f"Error updating lobby state: {e}")
         
+
+#Below are helper functions used in getting CV data
+def get_current_game_id():
+    """Helper function to get current game ID from room"""
+    print("Getting current game ID") # Debug: Function entry
+    try:
+        with get_db_connection_with_retry() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT g.id as game_id
+                FROM Games g
+                JOIN GameRooms r ON r.id = g.room_id
+                WHERE r.id = ? AND g.game_status = 'in_progress'
+            ''', (session['current_room'],))
+            
+            game = cursor.fetchone()
+            print(f"Found game ID: {game['game_id'] if game else None}") # Debug: Query result
+            return game['game_id'] if game else None
+    except sqlite3.Error as e:
+        print(f"Error getting game ID: {e}")
+        return None
+    
+
+def get_latest_cv_throw_id():
+    """Helper function to get the latest throw ID from CV database"""
+    try:
+        with sqlite3.connect(CV_DB_PATH) as cv_conn:
+            cv_conn.row_factory = sqlite3.Row
+            cursor = cv_conn.cursor()
+            cursor.execute('SELECT MAX(id) as max_id FROM throws')
+            result = cursor.fetchone()
+            return result['max_id'] if result['max_id'] is not None else 0
+    except sqlite3.Error as e:
+        print(f"Error getting latest CV throw ID: {e}")
+        return 0
+
+def check_cv_throws(game_id, last_id):
+    """Helper function to check for new CV throws"""
+    print(f"Checking CV throws for game {game_id} after ID {last_id}") # Debug: Function entry
+    try:
+        with sqlite3.connect(CV_DB_PATH) as cv_conn:
+            cv_conn.row_factory = sqlite3.Row
+            cursor = cv_conn.cursor()
+            
+            cursor.execute('''
+                SELECT id, score, multiplier 
+                FROM throws 
+                WHERE id > ? 
+                ORDER BY id ASC
+            ''', (last_id,))
+            
+            throws = cursor.fetchall()
+            print(f"Found {len(throws)} new throws") # Debug: Query result
+            return throws
+    except sqlite3.Error as e:
+        print(f"Error checking CV throws: {e}")
+        return []
 
 # Routes
 @app.route('/register', methods=['GET', 'POST'])
@@ -1257,60 +1357,70 @@ def handle_confirm_win(data):
 
 @socketio.on('end_game')
 def handle_end_game():
-    if 'current_room' not in session:
-        return
-        
     try:
-        with get_db_connection_with_retry() as conn:
-            cursor = conn.cursor()
+        game_id = get_current_game_id()
+        if game_id:
+            cv_active_games.pop(game_id, None)
+        if 'current_room' not in session:
+            return
             
-            # First check the game status
-            cursor.execute('''
-                SELECT game_status
-                FROM Games
-                WHERE room_id = ?
-                ORDER BY id DESC LIMIT 1
-            ''', (session['current_room'],))
-            
-            game = cursor.fetchone()
-            
-            if game:
-                if game['game_status'] == 'in_progress':
-                    # Only mark as abandoned if game was in progress
-                    cursor.execute('''
-                        UPDATE Games 
-                        SET game_status = 'abandoned'
-                        WHERE room_id = ? AND game_status = 'in_progress'
-                    ''', (session['current_room'],))
-                    
-                    cursor.execute('''
-                        UPDATE GameRooms
-                        SET room_status = 'abandoned'
-                        WHERE id = ?
-                    ''', (session['current_room'],))
-                else:
-                    # Game was already completed or abandoned, just clean up
-                    cursor.execute('''
-                        DELETE FROM GamePlayers
-                        WHERE game_id = ?
-                    ''', (session['current_room'],))
-                    
-                    cursor.execute('''
-                        DELETE FROM GameRooms
-                        WHERE id = ?
-                    ''', (session['current_room'],))
-            
-            conn.commit()
-            
-            # Notify all players in room
-            emit('game_ended', {
-                'message': f"Game ended by {session['username']}"
-            }, room=f"room_{session['current_room']}")
-            
-            session.pop('current_room', None)
-            
-    except sqlite3.Error as e:
-        emit('error', {'message': 'Failed to end game properly'})
+        try:
+            with get_db_connection_with_retry() as conn:
+                cursor = conn.cursor()
+                
+                # First check the game status
+                cursor.execute('''
+                    SELECT game_status
+                    FROM Games
+                    WHERE room_id = ?
+                    ORDER BY id DESC LIMIT 1
+                ''', (session['current_room'],))
+                
+                game = cursor.fetchone()
+                
+                if game:
+                    if game['game_status'] == 'in_progress':
+                        # Only mark as abandoned if game was in progress
+                        cursor.execute('''
+                            UPDATE Games 
+                            SET game_status = 'abandoned'
+                            WHERE room_id = ? AND game_status = 'in_progress'
+                        ''', (session['current_room'],))
+                        
+                        cursor.execute('''
+                            UPDATE GameRooms
+                            SET room_status = 'abandoned'
+                            WHERE id = ?
+                        ''', (session['current_room'],))
+                    else:
+                        # Game was already completed or abandoned, just clean up
+                        cursor.execute('''
+                            DELETE FROM GamePlayers
+                            WHERE game_id = ?
+                        ''', (session['current_room'],))
+                        
+                        cursor.execute('''
+                            DELETE FROM GameRooms
+                            WHERE id = ?
+                        ''', (session['current_room'],))
+                
+                conn.commit()
+                
+                # Notify all players in room
+                emit('game_ended', {
+                    'message': f"Game ended by {session['username']}"
+                }, room=f"room_{session['current_room']}")
+                
+                session.pop('current_room', None)
+                
+        except sqlite3.Error as e:
+            emit('error', {'message': 'Failed to end game properly'})
+    except Exception as e:
+        print(f"Error cleaning up CV mode: {e}")
+
+
+ 
+
 
 
 
@@ -1694,6 +1804,60 @@ def handle_join_game(data=None):
     except sqlite3.Error as e:
         print(f"Database error in join_game: {e}")
         emit('error', {'message': 'Failed to join game'})
+
+
+@socketio.on('toggle_cv_mode')
+def handle_toggle_cv_mode(data):
+    """Handle toggling CV mode on/off for entire game"""
+    print(f"Toggle CV mode called with data: {data}") # Debug: Event handler entry
+    global cv_polling_active, cv_polling_thread
+    
+    try:
+        game_id = get_current_game_id()
+        if not game_id:
+            print("No active game found for CV mode toggle") # Debug: No game
+            emit('error', {'message': 'No active game found'})
+            return
+
+        is_enabled = data.get('enabled', False)
+        print(f"CV mode being set to: {is_enabled} for game {game_id}") # Debug: Toggle state
+
+        if is_enabled:
+            # Get latest throw ID and start tracking this game
+            last_id = get_latest_cv_throw_id()
+            cv_active_games[game_id] = last_id
+            
+            # Start polling thread if not already running
+            if not cv_polling_active:
+                print("Starting CV polling thread") # Debug: Thread start
+                cv_polling_active = True
+                cv_polling_thread = threading.Thread(target=cv_polling_loop)
+                cv_polling_thread.daemon = True
+                cv_polling_thread.start()
+        else:
+            # Remove game from tracking
+            print(f"Stopping CV mode for game {game_id}") # Debug: Mode stop
+            cv_active_games.pop(game_id, None)
+            
+            # Stop polling if no games are using CV mode
+            if not cv_active_games and cv_polling_active:
+                print("Stopping CV polling thread") # Debug: Thread stop
+                cv_polling_active = False
+                if cv_polling_thread:
+                    cv_polling_thread.join(timeout=1.0)
+                    cv_polling_thread = None
+        
+        # Notify all players in the game about CV mode status
+        print(f"Broadcasting CV mode status to game {game_id}") # Debug: Broadcasting
+        emit('cv_mode_status', {
+            'enabled': is_enabled,
+            'toggled_by': session['username']
+        }, room=f"game_{game_id}")
+        
+    except Exception as e:
+        print(f"Error toggling CV mode: {e}")
+        emit('error', {'message': 'Failed to toggle CV mode'})
+
 
 
 # Run the server

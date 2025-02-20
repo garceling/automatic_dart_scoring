@@ -1,72 +1,46 @@
-import time
+# darts_cv_simulation.py
+
 import random
-from flask_socketio import SocketIO
+import time
 
 class DartDetection:
-
-    def __init__(self, socketio: SocketIO):
+    def __init__(self):
         self.cv_running = False
-        self.socketio = socketio
-        self.cameras = None
 
     def generate_random_score(self):
+        """Generate a random dart score"""
+        multiplier = 1
+        position = (0, 0)  # Fixed position for cv sim testing purposes
 
-        is_double = False
-        is_triple = False
-
-        dartboard_numbers = list(range(1, 21)) + [25] #25 is bullseye
-
+        dartboard_numbers = list(range(1, 21)) + [25]  # 25 is bullseye
         single_score = random.choice(dartboard_numbers)
 
-        if single_score == 25: #no triple for bullseye
-            is_double = random.choice([True, False]) 
-            return (single_score, is_double, False)
-     
-        multiplier = random.choices(["single", "double", "triple"], weights=[60, 20, 20])[0]
-    
-        if multiplier == "double":
-            is_double = True
-        elif multiplier == "triple":
-            is_triple = True
+        if single_score == 25:  # no triple for bullseye
+            multiplier = random.choice([1, 2])
+        else:
+            multiplier = random.choices([1, 2, 3], weights=[60, 20, 20])[0]
 
-        return (single_score, is_double, is_triple)
+        
+        print(f"single_score = {single_score}, multiplier = {multiplier}, position = {position}")
+        return (single_score, multiplier, position)
 
     def initialize(self):
-        """
-        This is where the cameras would be open and any other intilization will be done before the
-        dart detection
-
-        self.camera = cv2.camera_open()
-
-        """
-
+        """Simulate initialization time"""
         time.sleep(2)
-        self.socketio.emit('cvinit_status', {'cvInit': 'Done Init'})
-        
-
-
-    def cv_loop(self):
-        """
-        continuously detects darts and sends scores while running.
-
-        data in the form: (single_score, is_double, is_triple)
-
-        TODO: return data in the form of x,y coordinates, the app will have a picture of the dartboard
-        and plot + calculte the score
-
-        """
-
-        while self.cv_running:
-            time.sleep(5)  # Simulate deteciton time
-            score, is_double, is_triple = self.generate_random_score()
-            self.socketio.emit('dart_detected', {'score': score, 'is_double': is_double, 'is_triple': is_triple})
-
+        print("Dart detection initialized")
 
     def start(self):
-        if not self.cv_running:
-            self.cv_running = True
-            self.socketio.start_background_task(self.cv_loop) #run dart detection
+        """Start the simulation"""
+        self.cv_running = True
 
     def stop(self):
-        self.cv_running = False #stop the dart deteciton
-   
+        """Stop the simulation"""
+        self.cv_running = False
+
+    def get_next_throw(self):
+        """Get the next throw if running"""
+        if not self.cv_running:
+            return None
+            
+        time.sleep(5)  # Simulate detection time
+        return self.generate_random_score()
