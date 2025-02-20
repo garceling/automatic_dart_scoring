@@ -7,6 +7,8 @@ import random
 from datetime import datetime
 import time
 from contextlib import contextmanager
+import threading
+import time
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -21,6 +23,11 @@ app.register_blueprint(calibration_bp)
 
 # pass in the websocket for the calibartion
 register_socketio_events(socketio)
+
+
+cv_active_games = {}  # Dict to track CV mode status for games {game_id: last_processed_id}
+cv_polling_thread = None
+cv_polling_active = False
 
 @contextmanager
 def get_db_connection_with_retry(max_attempts=5):
@@ -42,6 +49,49 @@ def get_db_connection_with_retry(max_attempts=5):
             time.sleep(0.5)
             if conn:
                 conn.close()
+
+
+def cv_polling_loop():
+    """Background thread to poll CV database for new throws"""
+    global cv_polling_active
+    
+    while cv_polling_active:
+        try:
+            # Only poll if there are games using CV mode
+            if cv_active_games:
+                with get_db_connection_with_retry(db_path='cv_data.db') as cv_conn:
+                    cursor = cv_conn.cursor()
+                    
+                    # Get any games that need updating
+                    for game_id, last_id in cv_active_games.items():
+                        # Get new throws for this game
+                        cursor.execute('''
+                            SELECT id, score, multiplier 
+                            FROM throws 
+                            WHERE id > ? 
+                            ORDER BY id ASC
+                        ''', (last_id,))
+                        
+                        new_throws = cursor.fetchall()
+                        
+                        if new_throws:
+                            # Update game's last processed ID
+                            cv_active_games[game_id] = new_throws[-1]['id']
+                            
+                            # Send each throw to all players in the game
+                            for throw in new_throws:
+                                socketio.emit('cv_throw_detected', {
+                                    'score': throw['score'],
+                                    'multiplier': throw['multiplier']
+                                }, room=f"game_{game_id}")
+                
+        except sqlite3.Error as e:
+            print(f"Error polling CV database: {e}")
+        except Exception as e:
+            print(f"Error in CV polling loop: {e}")
+            
+        time.sleep(0.1)  # Poll every 100ms
+
 
 # Hashing passwords securely
 def hash_password(password):
@@ -1312,6 +1362,22 @@ def handle_end_game():
     except sqlite3.Error as e:
         emit('error', {'message': 'Failed to end game properly'})
 
+    if 'current_room' in session: #extra code to handle CV cleanup, might be changed if we decide to limit # of games to single room
+        try:
+            with get_db_connection_with_retry() as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT g.id as game_id
+                    FROM Games g
+                    WHERE g.room_id = ?
+                ''', (session['current_room'],))
+                game = cursor.fetchone()
+                if game:
+                    cv_active_games.pop(game['game_id'], None)
+        except sqlite3.Error:
+            pass
+
+
 
 
 @socketio.on('join_lobby')
@@ -1694,6 +1760,72 @@ def handle_join_game(data=None):
     except sqlite3.Error as e:
         print(f"Database error in join_game: {e}")
         emit('error', {'message': 'Failed to join game'})
+
+
+@socketio.on('toggle_cv_mode')
+def handle_toggle_cv_mode(data):
+    """Handle toggling CV mode on/off for entire game"""
+    global cv_polling_active, cv_polling_thread
+    
+    is_enabled = data.get('enabled', False)
+    
+    try:
+        # Get current game info
+        with get_db_connection_with_retry() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                SELECT g.id as game_id
+                FROM Games g
+                JOIN GameRooms r ON r.id = g.room_id
+                WHERE r.id = ? AND g.game_status = 'in_progress'
+            ''', (session['current_room'],))
+            
+            game = cursor.fetchone()
+            
+            if not game:
+                emit('error', {'message': 'No active game found'})
+                return
+            
+            game_id = game['game_id']
+            
+            if is_enabled:
+                # Get the latest throw ID as starting point
+                with get_db_connection_with_retry(db_path='cv_data.db') as cv_conn:
+                    cursor = cv_conn.cursor()
+                    cursor.execute('SELECT MAX(id) as max_id FROM throws')
+                    result = cursor.fetchone()
+                    last_id = result['max_id'] if result['max_id'] is not None else 0
+                    
+                    # Add game to tracking dict
+                    cv_active_games[game_id] = last_id
+                    
+                    # Start polling thread if not already running
+                    if not cv_polling_active:
+                        cv_polling_active = True
+                        cv_polling_thread = threading.Thread(target=cv_polling_loop)
+                        cv_polling_thread.daemon = True
+                        cv_polling_thread.start()
+            else:
+                # Remove game from tracking dict
+                cv_active_games.pop(game_id, None)
+                
+                # Stop polling if no games are using CV mode
+                if not cv_active_games and cv_polling_active:
+                    cv_polling_active = False
+                    if cv_polling_thread:
+                        cv_polling_thread.join(timeout=1.0)
+                        cv_polling_thread = None
+            
+            # Notify all players in the game about CV mode status
+            emit('cv_mode_status', {
+                'enabled': is_enabled,
+                'toggled_by': session['username']
+            }, room=f"game_{game_id}")
+        
+    except Exception as e:
+        print(f"Error toggling CV mode: {e}")
+        emit('error', {'message': 'Failed to toggle CV mode'})
+
 
 
 # Run the server

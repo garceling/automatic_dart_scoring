@@ -227,6 +227,36 @@
         .btn.cancel {
             background-color: #f44336;
         }
+
+        .cv-mode-control {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #ccc;
+            transition: background-color 0.3s;
+        }
+
+        .status-indicator.active {
+            background-color: #4CAF50;
+        }
+
+        #cvModeButton.active {
+            background-color: #2196F3;
+        }
+
+        .cv-mode-notification {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -236,6 +266,12 @@
                 <h2>Game #<span id="gameId">-</span></h2>
                 <div>Game Type: <span id="gameType">501</span></div>
                 <div>Double Out: <span id="doubleOut">No</span></div>
+                <div class="cv-mode-control">
+                    <button class="btn" id="cvModeButton" onclick="toggleCVMode()">
+                        CV Mode OFF
+                    </button>
+                    <span id="cvModeStatus" class="status-indicator"></span>
+                </div>
             </div>
 
             <div id="gameStatus" class="game-status waiting">
@@ -336,11 +372,49 @@
         let currentThrow = 1;
         let isMyTurn = false;
         let lastThrowData = null; // Store information about the last throw
+        let cvModeEnabled = false;
         
         socket.on('connect', () => {
             console.log('Connected to server');
             socket.emit('join_game', {});  // Pass empty object as data
         });
+
+        function toggleCVMode() {
+            if (!gameActive) {
+                alert('Please wait for the game to start before toggling CV mode.');
+                return;
+            }
+            
+            socket.emit('toggle_cv_mode', { enabled: !cvModeEnabled });
+        }
+
+        function updateCVModeUI(enabled, toggledBy) {
+            cvModeEnabled = enabled;
+            const button = document.getElementById('cvModeButton');
+            const indicator = document.getElementById('cvModeStatus');
+            
+            button.textContent = `CV Mode ${enabled ? 'ON' : 'OFF'}`;
+            button.className = `btn${enabled ? ' active' : ''}`;
+            indicator.className = `status-indicator${enabled ? ' active' : ''}`;
+            
+            // Show notification if someone toggled it
+            if (toggledBy) {
+                // Remove any existing notification
+                const existingNotification = document.querySelector('.cv-mode-notification');
+                if (existingNotification) {
+                    existingNotification.remove();
+                }
+                
+                // Add new notification
+                const notification = document.createElement('div');
+                notification.className = 'cv-mode-notification';
+                notification.textContent = `CV Mode ${enabled ? 'enabled' : 'disabled'} by ${toggledBy}`;
+                document.querySelector('.cv-mode-control').appendChild(notification);
+                
+                // Remove notification after 5 seconds
+                setTimeout(() => notification.remove(), 5000);
+            }
+        }
 
         function validateManualScore() {
             const scoreInput = document.getElementById('manualScoreInput');
@@ -472,6 +546,11 @@
                 `game-status ${data.game_over ? 'finished' : 'active'}`;
             document.getElementById('gameStatus').textContent = 
                 data.game_over ? `Game Over! Winner: ${data.winner}` : 'Game in progress';
+
+            
+            if (data.game_over && cvModeEnabled) {
+                updateCVModeUI(false, 'Game End');
+            }        
         });
 
         function showOverrideModal() {
@@ -596,6 +675,21 @@
             alert(data.message || 'An error occurred');
         });
 
+        socket.on('cv_mode_status', (data) => {
+            updateCVModeUI(data.enabled, data.toggled_by);
+        });
+
+        socket.on('cv_throw_detected', (data) => {
+            if (cvModeEnabled && gameActive && isMyTurn) {
+                // Submit the throw data to the game
+                socket.emit('throw_dart', {
+                    manual: true,
+                    score: data.score,
+                    multiplier: data.multiplier
+                });
+            }
+        });
+
         // Handle Enter key in manual score input
         document.getElementById('manualScoreInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -616,6 +710,13 @@
                 hideOverrideModal();
             }
         }
+
+
+
+
+
+
+
     </script>
 </body>
 </html>
