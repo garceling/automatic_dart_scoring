@@ -1848,7 +1848,7 @@ def handle_toggle_cv_mode(data):
                     cv_polling_thread = None
         
         # Notify all players in the game about CV mode status
-         print(f"Broadcasting CV mode status to game {game_id}") # Debug: Broadcasting
+        print(f"Broadcasting CV mode status to game {game_id}") # Debug: Broadcasting
         emit('cv_mode_status', {
             'enabled': is_enabled,
             'toggled_by': session['username']
