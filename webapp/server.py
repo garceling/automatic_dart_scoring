@@ -56,21 +56,25 @@ def get_db_connection_with_retry(max_attempts=5, db_path='dartboard.db'):
 
 def cv_polling_loop():
     """Background thread to poll CV database for new throws"""
+    print("CV polling loop started") # Debug: Loop start
     global cv_polling_active
     
     while cv_polling_active:
         try:
             # Only poll if there are games using CV mode
             if cv_active_games:
+                print(f"Checking throws for {len(cv_active_games)} active games") # Debug: Active games
                 for game_id, last_id in list(cv_active_games.items()):  # Use list to avoid runtime modification issues
                     new_throws = check_cv_throws(game_id, last_id)
                     
                     if new_throws:
+                        print(f"Found {len(new_throws)} new throws for game {game_id}") # Debug: New throws
                         # Update game's last processed ID
                         cv_active_games[game_id] = new_throws[-1]['id']
                         
                         # Send each throw to all players in the game
                         for throw in new_throws:
+                            print(f"Sending throw to game {game_id}: score={throw['score']}, multiplier={throw['multiplier']}") # Debug: Throw emit
                             socketio.emit('cv_throw_detected', {
                                 'score': throw['score'],
                                 'multiplier': throw['multiplier']
@@ -275,6 +279,7 @@ def update_lobby_state(room_id):
 #Below are helper functions used in getting CV data
 def get_current_game_id():
     """Helper function to get current game ID from room"""
+    print("Getting current game ID") # Debug: Function entry
     try:
         with get_db_connection_with_retry() as conn:
             cursor = conn.cursor()
@@ -286,6 +291,7 @@ def get_current_game_id():
             ''', (session['current_room'],))
             
             game = cursor.fetchone()
+            print(f"Found game ID: {game['game_id'] if game else None}") # Debug: Query result
             return game['game_id'] if game else None
     except sqlite3.Error as e:
         print(f"Error getting game ID: {e}")
@@ -307,6 +313,7 @@ def get_latest_cv_throw_id():
 
 def check_cv_throws(game_id, last_id):
     """Helper function to check for new CV throws"""
+    print(f"Checking CV throws for game {game_id} after ID {last_id}") # Debug: Function entry
     try:
         with sqlite3.connect(CV_DB_PATH) as cv_conn:
             cv_conn.row_factory = sqlite3.Row
@@ -319,7 +326,9 @@ def check_cv_throws(game_id, last_id):
                 ORDER BY id ASC
             ''', (last_id,))
             
-            return cursor.fetchall()
+            throws = cursor.fetchall()
+            print(f"Found {len(throws)} new throws") # Debug: Query result
+            return throws
     except sqlite3.Error as e:
         print(f"Error checking CV throws: {e}")
         return []
@@ -1800,16 +1809,19 @@ def handle_join_game(data=None):
 @socketio.on('toggle_cv_mode')
 def handle_toggle_cv_mode(data):
     """Handle toggling CV mode on/off for entire game"""
+    print(f"Toggle CV mode called with data: {data}") # Debug: Event handler entry
     global cv_polling_active, cv_polling_thread
     
     try:
         game_id = get_current_game_id()
         if not game_id:
+            print("No active game found for CV mode toggle") # Debug: No game
             emit('error', {'message': 'No active game found'})
             return
 
         is_enabled = data.get('enabled', False)
-        
+        print(f"CV mode being set to: {is_enabled} for game {game_id}") # Debug: Toggle state
+
         if is_enabled:
             # Get latest throw ID and start tracking this game
             last_id = get_latest_cv_throw_id()
@@ -1817,22 +1829,26 @@ def handle_toggle_cv_mode(data):
             
             # Start polling thread if not already running
             if not cv_polling_active:
+                print("Starting CV polling thread") # Debug: Thread start
                 cv_polling_active = True
                 cv_polling_thread = threading.Thread(target=cv_polling_loop)
                 cv_polling_thread.daemon = True
                 cv_polling_thread.start()
         else:
             # Remove game from tracking
+            print(f"Stopping CV mode for game {game_id}") # Debug: Mode stop
             cv_active_games.pop(game_id, None)
             
             # Stop polling if no games are using CV mode
             if not cv_active_games and cv_polling_active:
+                print("Stopping CV polling thread") # Debug: Thread stop
                 cv_polling_active = False
                 if cv_polling_thread:
                     cv_polling_thread.join(timeout=1.0)
                     cv_polling_thread = None
         
         # Notify all players in the game about CV mode status
+         print(f"Broadcasting CV mode status to game {game_id}") # Debug: Broadcasting
         emit('cv_mode_status', {
             'enabled': is_enabled,
             'toggled_by': session['username']

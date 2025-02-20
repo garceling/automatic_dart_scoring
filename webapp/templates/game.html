@@ -385,6 +385,9 @@
                 return;
             }
             
+            cvModeEnabled = !cvModeEnabled;
+            console.log('Emitting toggle_cv_mode event:', cvModeEnabled); // Debug: Socket emit
+
             socket.emit('toggle_cv_mode', { enabled: !cvModeEnabled });
         }
 
@@ -676,18 +679,24 @@
         });
 
         socket.on('cv_mode_status', (data) => {
+            console.log('Received cv_mode_status:', data); // Debug: Socket response
             updateCVModeUI(data.enabled, data.toggled_by);
         });
 
         socket.on('cv_throw_detected', (data) => {
+            console.log('Received cv_throw_detected:', data); // Debug: Throw detection
             if (cvModeEnabled && gameActive && isMyTurn) {
                 // Submit the throw data to the game
+                console.log('Processing detected throw'); // Debug: Throw processing
                 socket.emit('throw_dart', {
                     manual: true,
                     score: data.score,
                     multiplier: data.multiplier
                 });
-            }
+        }  else {
+                console.log('Ignoring throw - Mode:', cvModeEnabled, 'Game:', gameActive, 'Turn:', isMyTurn); // Debug: Throw ignored
+                }
+
         });
 
         // Handle Enter key in manual score input
