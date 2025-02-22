@@ -370,7 +370,7 @@
         let gameActive = false;
         let currentRound = 1;
         let currentThrow = 1;
-        let isMyTurn = false;
+        
         let lastThrowData = null; // Store information about the last throw
         let cvModeEnabled = false;
         
@@ -685,7 +685,7 @@
 
         socket.on('cv_throw_detected', (data) => {
             console.log('Received cv_throw_detected:', data); // Debug: Throw detection
-            if (cvModeEnabled && gameActive && isMyTurn) {
+            if (cvModeEnabled && gameActive) {
                 // Submit the throw data to the game
                 console.log('Processing detected throw'); // Debug: Throw processing
                 socket.emit('throw_dart', {
@@ -694,7 +694,7 @@
                     multiplier: data.multiplier
                 });
         }  else {
-                console.log('Ignoring throw - Mode:', cvModeEnabled, 'Game:', gameActive, 'Turn:', isMyTurn); // Debug: Throw ignored
+                console.log('Ignoring throw - Mode:', cvModeEnabled, 'Game:', gameActive); // Debug: Throw ignored
                 }
 
         });
