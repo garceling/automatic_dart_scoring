@@ -11,7 +11,7 @@ import threading
 import time
 import os
 
-CV_DB_PATH = os.path.join('/home/lawrence/Desktop/Grace_Github_pi/automatic_dart_scoring/simulation', 'cv_data.db') #path is for lawrence's pi
+CV_DB_PATH = os.path.join('/home/aithihya/Desktop/Capstone/automatic_dart_scoring/simulation', 'cv_data.db') #path is for lawrence's pi
 
 # Initialize Flask app and SocketIO
 app = Flask(__name__)
@@ -979,51 +979,43 @@ def handle_throw_dart(data=None):
         with get_db_connection_with_retry() as conn:
             cursor = conn.cursor()
             
-            # Modified query to get current game state and last round info
+            # Fetch comprehensive game state
             cursor.execute('''
-                SELECT g.*, gp.current_score, gp.player_position as current_position,
-                       r.game_type, r.double_out_required, r.id as room_id,
-                       COALESCE(
-                           (SELECT gr.round_total 
-                            FROM GameRounds gr 
-                            WHERE gr.game_id = g.id 
-                            AND gr.player_id = gp.player_id
-                            AND gr.is_bust = 0
-                            ORDER BY gr.round_number DESC LIMIT 1), 0
-                       ) as last_round_total
+                SELECT 
+                    g.*, 
+                    gp.current_score, 
+                    gp.player_position as current_position,
+                    r.game_type, 
+                    r.double_out_required, 
+                    r.id as room_id,
+                    p.username as current_player_username
                 FROM Games g
                 JOIN GameRooms r ON r.id = g.room_id
                 JOIN GamePlayers gp ON gp.game_id = g.id
+                JOIN Players p ON p.id = gp.player_id
                 WHERE r.id = ? 
                 AND g.game_status = 'in_progress'
                 AND gp.player_id = ?
+                AND gp.player_position = g.current_player_position
             ''', (session['current_room'], session['user_id']))
             
             game_state = cursor.fetchone()
             
             if not game_state:
-                print("No game state found")
-                emit('error', {'message': 'No active game found'})
-                return
-
-            # Verify it's this player's turn
-            if game_state['current_player_position'] != game_state['current_position']:
-                emit('error', {'message': 'Not your turn'})
+                emit('error', {'message': 'Not your turn or no active game found'})
                 return
             
-            print(f"Processing throw for game {game_state['id']}")
-
-            # Handle manual throw if provided
+            # Handle manual or simulated throw
             if data and data.get('manual'):
                 base_score = data.get('score')
                 multiplier = data.get('multiplier')
                 
                 # Server-side validation
                 if not validate_dart_score(base_score, multiplier):
-                    emit('error', {'message': 'Invalid score'})
+                    emit('error', {'message': 'Invalid dart score'})
                     return
                     
-                # Handle bull scores specially
+                # Handle bull scores
                 if base_score == 25 or base_score == 50:
                     score = base_score
                     multiplier = 2 if base_score == 50 else 1
@@ -1035,34 +1027,30 @@ def handle_throw_dart(data=None):
                 # Use existing simulation
                 score, multiplier, bull_flag = simulate_dart_throw()
             
-            print(f"Throw result: score={score}, multiplier={multiplier}, bull={bull_flag}")
-            
-            # Get current round information
+            # Get or create current round
             round_id, throw_number = get_current_round(game_state['id'], session['user_id'])
-            print(f"Current round: {round_id}, throw: {throw_number}")
-
-            # Get the current round's existing throws
+            
+            # Fetch current round details
             cursor.execute('''
                 SELECT *, 
-                       COALESCE(throw1_score, 0) + COALESCE(throw2_score, 0) + COALESCE(throw3_score, 0) as current_round_total,
-                       score_before_throw1
+                    COALESCE(throw1_score, 0) + COALESCE(throw2_score, 0) + COALESCE(throw3_score, 0) as current_round_total,
+                    score_before_throw1
                 FROM GameRounds
                 WHERE id = ?
             ''', (round_id,))
             current_round = cursor.fetchone()
             
-            # Determine the correct score to use before this throw
+            # Determine score before this throw
             if throw_number == 1:
                 score_before_throw = game_state['current_score']
             else:
-                # For subsequent throws, use the score after previous throws
-                previous_throws_total = 0
-                for i in range(1, throw_number):
-                    previous_score = current_round[f'throw{i}_score']
-                    if previous_score is not None:
-                        previous_throws_total += previous_score
+                # Calculate previous throws total
+                previous_throws_total = sum(
+                    current_round[f'throw{i}_score'] or 0 
+                    for i in range(1, throw_number)
+                )
                 score_before_throw = current_round['score_before_throw1'] - previous_throws_total
-
+            
             # Record the throw
             throw_column = f'throw{throw_number}_score'
             mult_column = f'throw{throw_number}_multiplier'
@@ -1075,44 +1063,35 @@ def handle_throw_dart(data=None):
                     {score_before_column} = ?
                 WHERE id = ?
             ''', (score, multiplier, score_before_throw, round_id))
-
-            # Calculate round total up to this throw
+            
+            # Recalculate round total
             cursor.execute('''
-                SELECT *, 
-                       COALESCE(throw1_score, 0) + COALESCE(throw2_score, 0) + COALESCE(throw3_score, 0) as current_round_total
+                SELECT 
+                    COALESCE(throw1_score, 0) + COALESCE(throw2_score, 0) + COALESCE(throw3_score, 0) as current_round_total,
+                    score_before_throw1
                 FROM GameRounds
                 WHERE id = ?
             ''', (round_id,))
             round_info = cursor.fetchone()
             round_total = round_info['current_round_total']
-
-            # Calculate potential score from the start of round score
+            
+            # Calculate potential score
             potential_score = round_info['score_before_throw1'] - round_total
-
-            # Get all players' current state
-            cursor.execute('''
-                SELECT p.username, gp.current_score, gp.player_position
-                FROM GamePlayers gp
-                JOIN Players p ON p.id = gp.player_id
-                WHERE gp.game_id = ?
-                ORDER BY gp.player_position
-            ''', (game_state['id'],))
-            players = cursor.fetchall()
-
-            # Check for win condition before bust check
+            
+            # Check for win condition
             is_win = (potential_score == 0 and 
                      (not game_state['double_out_required'] or multiplier == 2 or bull_flag))
-
+            
             # Check for bust conditions
             is_bust = (
                 potential_score < 0 or
                 (game_state['double_out_required'] and potential_score == 1) or
                 (game_state['double_out_required'] and potential_score == 0 and not (multiplier == 2 or bull_flag))
             )
-
+            
+            # Prepare for next state
             if is_bust:
-                print("Bust detected - keeping original score")
-                # Mark round as bust and clear throw scores
+                # Reset round, keep original score
                 cursor.execute('''
                     UPDATE GameRounds
                     SET is_bust = 1,
@@ -1125,20 +1104,9 @@ def handle_throw_dart(data=None):
                         throw3_multiplier = NULL
                     WHERE id = ?
                 ''', (round_id,))
-                # Keep original score for display
                 potential_score = current_round['score_before_throw1']
-
-                # Get updated round info after marking bust
-                cursor.execute('''
-                    SELECT gr.*, p.username as player_name
-                    FROM GameRounds gr
-                    JOIN Players p ON p.id = gr.player_id
-                    WHERE gr.id = ?
-                ''', (round_id,))
-                display_round_info = cursor.fetchone()
-                print("Bust round info:", dict(display_round_info))
-
-                # Set up for next player
+                
+                # Move to next player
                 cursor.execute('''
                     SELECT COUNT(*) as player_count FROM GamePlayers WHERE game_id = ?
                 ''', (game_state['id'],))
@@ -1150,8 +1118,8 @@ def handle_throw_dart(data=None):
                     SET current_player_position = ?
                     WHERE id = ?
                 ''', (next_position, game_state['id']))
-
-                # Get next player's username
+                
+                # Get next player's details
                 cursor.execute('''
                     SELECT p.username
                     FROM GamePlayers gp
@@ -1160,8 +1128,8 @@ def handle_throw_dart(data=None):
                 ''', (game_state['id'], next_position))
                 next_player = cursor.fetchone()
                 next_player_name = next_player['username']
-
-                # Start new round
+                
+                # Prepare new round
                 cursor.execute('''
                     SELECT COALESCE(MAX(round_number), 0) + 1 as next_round
                     FROM GameRounds
@@ -1173,30 +1141,20 @@ def handle_throw_dart(data=None):
                     INSERT INTO GameRounds (game_id, player_id, round_number)
                     VALUES (?, ?, ?)
                 ''', (game_state['id'], session['user_id'], next_round))
-
+                
                 game_over = False
-
+            
             elif throw_number == 3 or is_win:
-                # Normal round completion or win
+                # Update player's score for the round
                 cursor.execute('''
                     UPDATE GamePlayers
                     SET current_score = ?
                     WHERE game_id = ? AND player_id = ?
                 ''', (potential_score, game_state['id'], session['user_id']))
                 
-                # Get round info for display
-                cursor.execute('''
-                    SELECT gr.*, p.username as player_name
-                    FROM GameRounds gr
-                    JOIN Players p ON p.id = gr.player_id
-                    WHERE gr.id = ?
-                ''', (round_id,))
-                display_round_info = cursor.fetchone()
-                print("Regular round info:", dict(display_round_info))
-
                 if is_win:
                     game_over = True
-                    next_player_name = session['username']  # Keep current player as winner
+                    next_player_name = session['username']
                     
                     # Update game and room status
                     cursor.execute('''
@@ -1235,45 +1193,62 @@ def handle_throw_dart(data=None):
                     next_player_name = next_player['username']
 
                     game_over = False
-
             else:
-                # Middle of round, not a win or bust
-                cursor.execute('''
-                    SELECT gr.*, p.username as player_name
-                    FROM GameRounds gr
-                    JOIN Players p ON p.id = gr.player_id
-                    WHERE gr.id = ?
-                ''', (round_id,))
-                display_round_info = cursor.fetchone()
-                print("Mid-round info:", dict(display_round_info))
-                
+                # Middle of round
                 game_over = False
-                next_player_name = session['username']  # Stay on current player
-
+                next_player_name = session['username']
+            
+            # Get all players for state update
+            cursor.execute('''
+                SELECT p.username, gp.current_score, gp.player_position
+                FROM GamePlayers gp
+                JOIN Players p ON p.id = gp.player_id
+                WHERE gp.game_id = ?
+                ORDER BY gp.player_position
+            ''', (game_state['id'],))
+            players = cursor.fetchall()
+            
+            # Get round info for display
+            cursor.execute('''
+                SELECT gr.*, p.username as player_name
+                FROM GameRounds gr
+                JOIN Players p ON p.id = gr.player_id
+                WHERE gr.id = ?
+            ''', (round_id,))
+            display_round_info = cursor.fetchone()
+            
             conn.commit()
             
-            # Emit game state update to all players
+            # Comprehensive game state update
             emit('game_state_update', {
                 'game_id': game_state['id'],
                 'current_player': next_player_name,
                 'throw': {
                     'score': score,
                     'multiplier': multiplier,
-                    'is_bust': is_bust
+                    'is_bust': is_bust,
+                    'throw_number': throw_number,
+                    'bull_flag': bull_flag
                 },
                 'players': [{
                     'username': p['username'],
                     'score': p['current_score'],
                     'position': p['player_position']
                 } for p in players],
-                'round_info': dict(display_round_info),
+                'round_info': {
+                    'player_name': display_round_info['player_name'] if display_round_info else None,
+                    'round_number': display_round_info['round_number'] if display_round_info else None,
+                    'throw1_score': display_round_info['throw1_score'] if display_round_info else None,
+                    'throw2_score': display_round_info['throw2_score'] if display_round_info else None,
+                    'throw3_score': display_round_info['throw3_score'] if display_round_info else None
+                },
                 'current_score': potential_score,
                 'game_over': game_over,
                 'winner': session['username'] if game_over else None
             }, broadcast=True, room=f"game_{game_state['id']}")
             
     except sqlite3.Error as e:
-        print(f"Database error in handle_throw: {e}")
+        print(f"Database error in handle_throw_dart: {e}")
         emit('error', {'message': 'An error occurred while processing your throw'})
 
 
