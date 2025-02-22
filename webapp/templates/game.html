@@ -386,7 +386,8 @@
             }
             
             cvModeEnabled = !cvModeEnabled;
-            console.log('Emitting toggle_cv_mode event:', cvModeEnabled); // Debug: Socket emit
+            console.log('CV Mode state:', cvModeEnabled); // Debug: Socket emit
+            console.log('Game Active state:', gameActive);
 
             socket.emit('toggle_cv_mode', { enabled: cvModeEnabled });
         }
@@ -684,7 +685,8 @@
         });
 
         socket.on('cv_throw_detected', (data) => {
-            console.log('Received cv_throw_detected:', data); // Debug: Throw detection
+            console.log('CV throw detected:', data); // Debug: Throw detection
+            console.log('Current states - CV Mode:', cvModeEnabled, 'Game Active:', gameActive);
             if (cvModeEnabled && gameActive) {
                 // Submit the throw data to the game
                 console.log('Processing detected throw'); // Debug: Throw processing
