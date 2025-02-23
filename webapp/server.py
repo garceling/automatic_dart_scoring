@@ -1721,7 +1721,7 @@ def update_lobby_state(room_id):
 
 @socketio.on('join_game')
 def handle_join_game(data=None):
-    print(f"Player {session['username']} joining game room: game_{game['id']}")
+    #print(f"Player {session['username']} joining game room: game_{game['id']}")
     if 'user_id' not in session:
         return
     
