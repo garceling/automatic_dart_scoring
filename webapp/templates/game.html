@@ -684,22 +684,7 @@
             updateCVModeUI(data.enabled, data.toggled_by);
         });
 
-        socket.on('cv_throw_detected', (data) => {
-            console.log('CV throw detected:', data); // Debug: Throw detection
-            console.log('Current states - CV Mode:', cvModeEnabled, 'Game Active:', gameActive);
-            if (cvModeEnabled && gameActive) {
-                // Submit the throw data to the game
-                console.log('Processing detected throw'); // Debug: Throw processing
-                socket.emit('throw_dart', {
-                    manual: true,
-                    score: data.score,
-                    multiplier: data.multiplier
-                });
-        }  else {
-                console.log('Ignoring throw - Mode:', cvModeEnabled, 'Game:', gameActive); // Debug: Throw ignored
-                }
-
-        });
+        
 
         // Handle Enter key in manual score input
         document.getElementById('manualScoreInput').addEventListener('keypress', (e) => {
