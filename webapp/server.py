@@ -1012,9 +1012,9 @@ def handle_throw_dart(data=None):
 
             #removed player turn verification so cv get simulate from any turn
             # Verify it's this player's turn
-            #if game_state['current_player_position'] != game_state['current_position']:
-                #emit('error', {'message': 'Not your turn'})
-                #return
+            if game_state['current_player_position'] != game_state['current_position']:
+                emit('error', {'message': 'Not your turn'})
+                return
             
             print(f"Processing throw for game {game_state['id']}")
 
