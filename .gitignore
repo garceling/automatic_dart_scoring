@@ -2,3 +2,4 @@ venv/
 *.pyc
 *.npz
 old-venv/
+startup.sh
