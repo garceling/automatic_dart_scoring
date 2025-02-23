@@ -3,3 +3,4 @@ venv/
 *.npz
 old-venv/
 startup.sh
+cv_data.db
