@@ -73,9 +73,11 @@ def cv_polling_loop():
                         cv_active_games[game_id] = new_throws[-1]['id']
                         
                         # Send each throw to all players in the game
+                        #Tweaked emit to use same code as manual throw. Basically the socketio emitting wasn't working with the cv_dart_detected emit to the html, so instead we're just gonna trick the script into thinking we are doing a manual throw (which works) but the manual throw info is from our cv writer
                         for throw in new_throws:
                             print(f"Sending throw to game {game_id}: score={throw['score']}, multiplier={throw['multiplier']}") # Debug: Throw emit
-                            socketio.emit('cv_throw_detected', {
+                            socketio.emit('throw_dart', {
+                                'manual' : True,
                                 'score': throw['score'],
                                 'multiplier': throw['multiplier']
                             }, room=f"game_{game_id}")
@@ -971,6 +973,7 @@ def handle_override_throw(data):
 
 @socketio.on('throw_dart')
 def handle_throw_dart(data=None):
+    print(f"Processing throw_dart event: {data}")
     if 'user_id' not in session:
         emit('error', {'message': 'Not authenticated'})
         return
@@ -1005,11 +1008,13 @@ def handle_throw_dart(data=None):
                 print("No game state found")
                 emit('error', {'message': 'No active game found'})
                 return
+            
 
+            #removed player turn verification so cv get simulate from any turn
             # Verify it's this player's turn
-            if game_state['current_player_position'] != game_state['current_position']:
-                emit('error', {'message': 'Not your turn'})
-                return
+            #if game_state['current_player_position'] != game_state['current_position']:
+                #emit('error', {'message': 'Not your turn'})
+                #return
             
             print(f"Processing throw for game {game_state['id']}")
 
@@ -1716,6 +1721,7 @@ def update_lobby_state(room_id):
 
 @socketio.on('join_game')
 def handle_join_game(data=None):
+    print(f"Player {session['username']} joining game room: game_{game['id']}")
     if 'user_id' not in session:
         return
     
